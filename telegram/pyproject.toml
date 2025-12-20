@@ -1,0 +1,14 @@
+[project]
+name = "telegram"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "python-dotenv>=1.2.1",
+    "sqlmodel>=0.0.27",
+    "telethon>=1.42.0",
+    "typer>=0.20.0",
+    "shared",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }

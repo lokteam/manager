@@ -1,0 +1,1 @@
+cd /home/alex/projects/manager && uv run main.py "$@"
