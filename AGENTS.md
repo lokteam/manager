@@ -7,10 +7,12 @@
 - Write code that can run 24/7 without supervision.
 - Fail loudly and log errors explicitly.
 - Do not introduce scalability patterns unless explicitly requested.
+- Always check the most fresh documentation for the library with Context7 before writing code.
+- Follow the latest rules and styling for libraries. Do not use deprecated or old-fashioned (like in previous library version) methods, syntax, etc.
 
 ## Project constraints:
 
-- Async-first architecture.
+- Typer for CLI.
 - Telethon for Telegram API.
 - PydanticAi for AI agents.
 - SQLite + SQLModel for storing data.
@@ -19,6 +21,7 @@
 
 ## Style rules:
 
+- 2 space indentation
 - Prefer small functions.
 - One responsibility per file where possible.
 - Explicit is better than implicit.
@@ -32,6 +35,8 @@
 - Ruff for linting.
 - MyPy for type checking.
 - uv for package management.
+- Context7 MCP server to fetch documentation.
+- Bright Data MCP server for web search if unsure.
 
 ## Package Management with `uv`
 

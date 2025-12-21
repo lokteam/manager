@@ -16,3 +16,11 @@ members = ["telegram", "agents", "shared"]
 telegram = { workspace = true }
 agents = { workspace = true }
 shared = { workspace = true }
+
+[tool.ruff]
+indent-width = 2
+line-length = 88
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"

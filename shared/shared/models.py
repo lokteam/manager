@@ -1,17 +1,33 @@
 import os
+import json
 import contextlib
 from enum import Enum
 from datetime import datetime
-from typing import Annotated, Generator
+from typing import Generator
 
+from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, Column
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON
 
 
 # Database configuration
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "database.db")
 DB_URL = f"sqlite:///{DB_PATH}"
-engine = create_engine(DB_URL)
+
+
+def pydantic_encoder(obj):
+  if hasattr(obj, "model_dump"):
+    return obj.model_dump()
+  if isinstance(obj, Enum):
+    return obj.name
+  raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+engine = create_engine(
+  DB_URL,
+  connect_args={"check_same_thread": False},
+  json_serializer=lambda obj: json.dumps(obj, default=pydantic_encoder),
+)
 
 
 @contextlib.contextmanager
@@ -29,6 +45,14 @@ class EnumCat(str, Enum):
   def show(self):
     return f"{self.name}: {self.value}"
 
+  @classmethod
+  def _missing_(cls, value):
+    if isinstance(value, str):
+      for member in cls:
+        if member.name == value:
+          return member
+    return super()._missing_(value)
+
 
 class DialogType(str, Enum):
   USER = "User"
@@ -39,9 +63,9 @@ class DialogType(str, Enum):
 class Dialog(SQLModel, table=True):
   id: int = Field(primary_key=True)
   entity_type: DialogType
-  username: str = None
-  name: str = None
-  folder_id: int = None
+  username: str | None = Field(default=None, index=True)
+  name: str | None = Field(default=None, index=True)
+  folder_id: int | None = None
 
   messages: list["Message"] = Relationship(back_populates="dialog")
 
@@ -55,58 +79,61 @@ class PeerType(str, Enum):
 class Message(SQLModel, table=True):
   id: int = Field(primary_key=True)
   dialog_id: int = Field(foreign_key="dialog.id")
-  from_id: int = None
-  from_type: PeerType = None
-  text: str = None
-  date: datetime = None
+  from_id: int | None = None
+  from_type: PeerType | None = None
+  text: str | None = None
+  date: datetime | None = None
 
   dialog: Dialog = Relationship(back_populates="messages")
   review: "VacancyReview" = Relationship(back_populates="message")
 
 
 class ContactType(EnumCat):
-  PHONE = "Mobile phone number"
-  EMAIL = "Email address"
-  TELEGRAM_USERNAME = "Username in telegram (usually starts with @)"
-  EXTERNAL_PLATFORM = "Link to vacancy on head hunting platform"
-  OTHER = "All others"
+  PHONE = "PHONE"
+  EMAIL = "EMAIL"
+  TELEGRAM_USERNAME = "TELEGRAM_USERNAME"
+  EXTERNAL_PLATFORM = "EXTERNAL_PLATFORM"
+  OTHER = "OTHER"
 
 
 class VacancyReviewDecision(EnumCat):
-  DISMISS = "Message is unrelated"
-  APPROVE = "Message is related"
+  DISMISS = "DISMISS"
+  APPROVE = "APPROVE"
+
+
+class ContactDTO(BaseModel):
+  type: ContactType = Field(description="Type of contact")
+  value: str = Field(description="Contact value (email, phone, etc.)")
 
 
 class VacancyReview(SQLModel, table=True):
-  type Contacts = list[list[ContactType, Annotated[str, "Contact value"]]]
-
-  id: int = Field(primary_key=True, default=None)
+  id: int | None = Field(primary_key=True, default=None)
   message_id: int = Field(foreign_key="message.id", unique=True)
   decision: VacancyReviewDecision
-  contacts: Contacts = Field(sa_column=Column(JSONB), default_factory=list)
+  contacts: list[ContactDTO] = Field(sa_column=Column(JSON), default_factory=list)
   vacancy_position: str
   vacancy_description: str
-  vacancy_requirements: str | None
-  salary_fork_from: int | None
-  salary_fork_to: int | None
+  vacancy_requirements: str | None = None
+  salary_fork_from: int | None = None
+  salary_fork_to: int | None = None
 
   message: Message = Relationship(back_populates="review")
   vacancy: "VacancyProgress" = Relationship(back_populates="review")
 
 
 class VacancyProgressStatus(EnumCat):
-  NEW = "New, untouched vacancy"
-  CONTACT = "I am chatting with HR's"
-  IGNORE = "I was ignored by HR or was early rejected without interview"
-  INTERVIEW = "I am waiting for the job interview"
-  REJECT = "I was rejected"
-  OFFER = "I was given an offer"
+  NEW = "NEW"
+  CONTACT = "CONTACT"
+  IGNORE = "IGNORE"
+  INTERVIEW = "INTERVIEW"
+  REJECT = "REJECT"
+  OFFER = "OFFER"
 
 
 class VacancyProgress(SQLModel, table=True):
-  id: int = Field(primary_key=True, default=None)
+  id: int | None = Field(primary_key=True, default=None)
   review_id: int = Field(foreign_key="vacancyreview.id", unique=True)
   status: VacancyProgressStatus = Field(default=VacancyProgressStatus.NEW)
-  comment: str | None
+  comment: str | None = None
 
   review: VacancyReview = Relationship(back_populates="vacancy")

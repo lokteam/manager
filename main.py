@@ -9,4 +9,4 @@ app.add_typer(telegram_app, name="telegram")
 app.add_typer(agents_app, name="agents")
 
 if __name__ == "__main__":
-    app()
+  app()
