@@ -1,79 +1,75 @@
 #!/home/alex/projects/telegram_accounts/al_addr/.venv/bin/python
 import os
-from pprint import pp
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from telethon import TelegramClient
-from telethon.functions import channels
 import typer
 
 from shared import models as db
 from .converters import extract_dialog_type, extract_peer_type, extract_peer_id
 
-# Загрузка переменных окружения из .env
-load_dotenv()
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
 
-session_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "anon.session"
-)
-client = TelegramClient(session_path, api_id, api_hash)
+client: TelegramClient
 
-# Инициализация БД (теперь всё внутри shared.models)
-db.init_db()
+app = typer.Typer(name="tgfetch")
+
+
+@app.callback()
+def callback():
+  global client
+  client = TelegramClient("al_addr", api_id, api_hash)
+  db.init_db()
+  print("I am here before app exec")
 
 
 async def get_messages(
     dialog, new_only: bool, max_messages: int, offset_date: datetime
 ):
-    if isinstance(dialog, int):
-        dialogs = await client.get_dialogs()
-        dialog = next(d for d in dialogs if d.id == dialog)
+  if isinstance(dialog, int):
+    dialogs = await client.get_dialogs()
+    dialog = next(d for d in dialogs if d.id == dialog)
 
-    typer.echo(f"Fetching messages from chat ID: {dialog.id}")
+  typer.echo(f"Fetching messages from chat ID: {dialog.id}")
 
-    if new_only and dialog.unread_count <= 0:
-        return
-    elif new_only:
-        limit = min(max_messages, dialog.unread_count)
-    else:
-        limit = max_messages
+  if new_only and dialog.unread_count <= 0:
+    return
+  elif new_only:
+    limit = min(max_messages, dialog.unread_count)
+  else:
+    limit = max_messages
 
-    messages = await client.get_messages(dialog, offset_date=offset_date)
-    kwargs = {
-        "entity": dialog,
-        "limit": limit,
-    }
+  messages = await client.get_messages(dialog, offset_date=offset_date)
+  kwargs = {
+      "entity": dialog,
+      "limit": limit,
+  }
 
-    if messages:
-        kwargs["min_id"] = messages[0].id
+  if messages:
+    kwargs["min_id"] = messages[0].id
 
-    messages = await client.get_messages(**kwargs)
+  messages = await client.get_messages(**kwargs)
 
-    typer.echo(f"Retrieved {len(messages)} messages")
+  typer.echo(f"Retrieved {len(messages)} messages")
 
-    with db.get_session() as session:
-        for message in messages:
-            await message.mark_read()
-            message_model = db.Message(
-                id=message.id,
-                dialog_id=dialog.id,
-                from_id=extract_peer_id(message),
-                from_type=extract_peer_type(message),
-                text=message.message,
-                date=message.date,
-            )
+  with db.get_session() as session:
+    for message in messages:
+      await message.mark_read()
+      message_model = db.Message(
+          id=message.id,
+          dialog_id=dialog.id,
+          from_id=extract_peer_id(message),
+          from_type=extract_peer_type(message),
+          text=message.message,
+          date=message.date,
+      )
 
-            session.merge(message_model)
+      session.merge(message_model)
 
-        session.commit()
+    session.commit()
 
-    typer.echo(f"✓ Successfully saved {len(messages)} messages to database")
-    return messages
-
-
-app = typer.Typer(name="tgfetch")
+  typer.echo(f"✓ Successfully saved {len(messages)} messages to database")
+  return messages
 
 
 @app.command()
@@ -86,59 +82,59 @@ def fetch(
         10000, help="Maximum messages per chat (None for all)"
     ),
 ):
-    """Fetch all dialogs and messages from Telegram and save to database"""
-    client.start()
+  """Fetch all dialogs and messages from Telegram and save to database"""
+  client.start()
 
-    async def f_():
-        dialogs = await client.get_dialogs()
-        typer.echo(f"Found {len(dialogs)} dialogs")
+  async def f_():
+    dialogs = await client.get_dialogs()
+    typer.echo(f"Found {len(dialogs)} dialogs")
 
-        with db.get_session() as session:
-            for dialog in dialogs:
-                dialog_model = db.Dialog(
-                    id=dialog.id,
-                    name=dialog.name,
-                    username=dialog.entity.username,
-                    entity_type=extract_dialog_type(dialog),
-                    folder_id=dialog.folder_id,
-                )
+    with db.get_session() as session:
+      for dialog in dialogs:
+        dialog_model = db.Dialog(
+            id=dialog.id,
+            name=dialog.name,
+            username=dialog.entity.username,
+            entity_type=extract_dialog_type(dialog),
+            folder_id=dialog.folder_id,
+        )
 
-                session.merge(dialog_model)
-            session.commit()
+        session.merge(dialog_model)
+      session.commit()
 
-            for dialog in dialogs:
-                await get_messages(dialog, new_only, max_messages, offset_date)
+      for dialog in dialogs:
+        await get_messages(dialog, new_only, max_messages, offset_date)
 
-        typer.echo(f"✓ Successfully saved {len(dialogs)} chats to database")
+    typer.echo(f"✓ Successfully saved {len(dialogs)} chats to database")
 
-    client.loop.run_until_complete(f_())
+  client.loop.run_until_complete(f_())
 
 
 @app.command()
 def fetch_chats():
-    """Fetch all chats from Telegram and save to database"""
-    client.start()
+  """Fetch all chats from Telegram and save to database"""
+  client.start()
 
-    async def f_():
-        dialogs = await client.get_dialogs()
-        typer.echo(f"Found {len(dialogs)} dialogs")
+  async def f_():
+    dialogs = await client.get_dialogs()
+    typer.echo(f"Found {len(dialogs)} dialogs")
 
-        with db.get_session() as session:
-            for dialog in dialogs:
-                dialog_model = db.Dialog(
-                    id=dialog.id,
-                    name=dialog.name,
-                    username=dialog.entity.username,
-                    entity_type=extract_dialog_type(dialog),
-                    folder_id=dialog.folder_id,
-                )
+    with db.get_session() as session:
+      for dialog in dialogs:
+        dialog_model = db.Dialog(
+            id=dialog.id,
+            name=dialog.name,
+            username=dialog.entity.username,
+            entity_type=extract_dialog_type(dialog),
+            folder_id=dialog.folder_id,
+        )
 
-                session.merge(dialog_model)
-            session.commit()
+        session.merge(dialog_model)
+      session.commit()
 
-        typer.echo(f"✓ Successfully saved {len(dialogs)} chats to database")
+    typer.echo(f"✓ Successfully saved {len(dialogs)} chats to database")
 
-    client.loop.run_until_complete(f_())
+  client.loop.run_until_complete(f_())
 
 
 @app.command()
@@ -152,12 +148,12 @@ def fetch_messages(
         10000, help="Maximum messages to fetch (None for all)"
     ),
 ):
-    """Parse messages from a specific chat by its ID and save to database"""
-    client.start()
-    client.loop.run_until_complete(
-        get_messages(chat_id, new_only, max_messages, offset_date)
-    )
+  """Parse messages from a specific chat by its ID and save to database"""
+  client.start()
+  client.loop.run_until_complete(
+      get_messages(chat_id, new_only, max_messages, offset_date)
+  )
 
 
 if __name__ == "__main__":
-    app()
+  app()

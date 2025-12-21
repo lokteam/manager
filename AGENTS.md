@@ -1,8 +1,4 @@
----
-alwaysApply: false
----
-
-You are working on a production-grade personal Telegram AI service.
+# You are working on a production-grade personal Agent manager service.
 
 ## General rules:
 
@@ -36,3 +32,12 @@ You are working on a production-grade personal Telegram AI service.
 - Ruff for linting.
 - MyPy for type checking.
 - uv for package management.
+
+## Package Management with `uv`
+
+These rules define strict guidelines for managing Python dependencies in this project using the `uv` dependency manager.
+
+**Use `uv` exclusively**
+
+- All Python dependencies **must be installed, synchronized, and locked** using `uv`.
+- Never use `pip`, `pip-tools`, or `poetry` directly for dependency management.
