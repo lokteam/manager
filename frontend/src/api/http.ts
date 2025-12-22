@@ -1,6 +1,6 @@
 import type { ApiError } from './types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/api\/v1\/?$/, '')
 
 const TOKEN_KEY = 'auth_token'
 
@@ -67,7 +67,10 @@ export async function http<T>(
     }
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const isAuthEndpoint = endpoint.startsWith('/auth') || endpoint.startsWith('/users/me')
+  const url = isAuthEndpoint ? `${API_BASE_URL}${endpoint}` : `${API_BASE_URL}/api/v1${endpoint}`
+
+  const response = await fetch(url, {
     ...options,
     headers,
     body: body instanceof FormData || body instanceof URLSearchParams
