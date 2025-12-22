@@ -125,3 +125,43 @@ class VacancyProgressUpdate(SchemaBase):
 
 class VacancyProgressRead(VacancyProgressCreate):
   id: int
+
+
+# CLI-like Command Schemas
+
+
+class TelegramFetchRequest(SchemaBase):
+  new_only: bool = True
+  date_from: datetime | None = None
+  date_to: datetime | None = None
+  max_messages: int = 1000
+  folder_id: int | None = None
+  dry_run: bool = False
+
+
+class TelegramFetchChatsRequest(SchemaBase):
+  folder_id: int | None = None
+  dry_run: bool = False
+
+
+class TelegramFetchMessagesRequest(SchemaBase):
+  chat_id: int
+  new_only: bool = True
+  date_from: datetime | None = None
+  date_to: datetime | None = None
+  max_messages: int = 1000
+  dry_run: bool = False
+
+
+class TelegramFolderAddRemoveRequest(SchemaBase):
+  folder_id: int
+  chat_id: int
+
+
+class TelegramFolderCreateRequest(SchemaBase):
+  title: str
+  chat_id: int | None = None
+
+
+class AgentReviewRequest(SchemaBase):
+  max_messages: int | None = None

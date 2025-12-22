@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from shared.models import User, UserRole, get_async_session
@@ -13,6 +14,7 @@ from typing import Annotated
 
 app = FastAPI(title="Manager Backend")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 # Include API routers
 app.include_router(api_router, prefix="/api/v1")
@@ -104,8 +106,8 @@ async def google_callback(
       await session.commit()
       await session.refresh(user)
 
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    access_token = create_access_token(data={"sub": user.email, "uid": user.id})
+    return RedirectResponse(url=f"{FRONTEND_URL}/login?token={access_token}")
 
 
 @app.get("/users/me")

@@ -16,6 +16,8 @@ dependencies = [
     "pyjwt>=2.10.1",
     "python-multipart>=0.0.21",
     "shared",
+    "telegram",
+    "agents",
     "uvicorn[standard]>=0.38.0",
 ]
 
@@ -25,3 +27,5 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 shared = { workspace = true, editable = true }
+telegram = { workspace = true, editable = true }
+agents = { workspace = true, editable = true }

@@ -33,11 +33,19 @@ def load_prompt(name: str) -> str:
   return path.read_text(encoding="utf-8")
 
 
-agent: Agent[None, BatchReviewOutput] = Agent(
-  "google-gla:gemini-3-flash-preview",
-  output_type=BatchReviewOutput,
-  system_prompt=load_prompt("reviewer"),
-)
+_agent: Agent[None, BatchReviewOutput] | None = None
+
+
+def get_agent() -> Agent[None, BatchReviewOutput]:
+  """Lazy initialize the agent."""
+  global _agent
+  if _agent is None:
+    _agent = Agent(
+      "google-gla:gemini-3-flash-preview",
+      output_type=BatchReviewOutput,
+      system_prompt=load_prompt("reviewer"),
+    )
+  return _agent
 
 
 async def process_messages(messages: list[Message]) -> BatchReviewOutput:
@@ -49,5 +57,6 @@ async def process_messages(messages: list[Message]) -> BatchReviewOutput:
   for msg in messages:
     prompt += f"ID: {msg.id}\nText: {msg.text}\n---\n"
 
+  agent = get_agent()
   result = await agent.run(prompt)
   return result.output

@@ -13,9 +13,15 @@ from shared.models import (
 )
 from backend.auth.deps import get_current_user
 from . import schemas
+from .telegram_router import router as telegram_router
+from .agents_router import router as agents_router
 from typing import Annotated
 
 api_router = APIRouter()
+
+# Telegram and Agents Routers
+api_router.include_router(telegram_router)
+api_router.include_router(agents_router)
 
 
 # Helper to get user's account IDs for hierarchical filtering
