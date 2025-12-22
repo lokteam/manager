@@ -106,14 +106,16 @@ async def get_messages(
 
 
 async def sync_dialogs(folder_id: int | None = None, dry_run: bool = False):
-  included_peer_ids = []
-  if folder_id is not None:
-    filters_resp = await client(functions.messages.GetDialogFiltersRequest())
-    target_filter = next(
-      (f for f in filters_resp.filters if getattr(f, "id", None) == folder_id), None
-    )
+  filters_resp = await client(functions.messages.GetDialogFiltersRequest())
+  all_filters = {
+    f.id: f for f in filters_resp.filters if isinstance(f, types.DialogFilter)
+  }
 
-    if not target_filter or not isinstance(target_filter, types.DialogFilter):
+  included_peer_ids = []
+  target_filter = None
+  if folder_id is not None:
+    target_filter = all_filters.get(folder_id)
+    if not target_filter:
       typer.echo(f"Error: Folder with ID {folder_id} not found.")
       return []
 
@@ -138,6 +140,30 @@ async def sync_dialogs(folder_id: int | None = None, dry_run: bool = False):
       typer.echo(f"Chat: {dialog.id} | {dialog.name} | {extract_dialog_type(dialog)}")
   else:
     with db.get_session() as session:
+      # Pre-create/merge all folders found in Telegram
+      db_folders = {}
+      for f_id, f_obj in all_filters.items():
+        folder_model = db.Folder(id=f_id, name=f_obj.title.text)
+        session.merge(folder_model)
+      session.commit()
+
+      # Map peer IDs to folder IDs from Telegram
+      peer_to_folders = {}
+      for f_id, f_obj in all_filters.items():
+        for peer in f_obj.include_peers:
+          p_id = None
+          if isinstance(peer, types.InputPeerUser):
+            p_id = peer.user_id
+          elif isinstance(peer, types.InputPeerChat):
+            p_id = peer.chat_id
+          elif isinstance(peer, types.InputPeerChannel):
+            p_id = int("-100" + str(peer.channel_id))
+
+          if p_id:
+            if p_id not in peer_to_folders:
+              peer_to_folders[p_id] = []
+            peer_to_folders[p_id].append(f_id)
+
       for dialog in dialogs:
         dialog_model = db.Dialog(
           id=dialog.id,
@@ -146,10 +172,18 @@ async def sync_dialogs(folder_id: int | None = None, dry_run: bool = False):
           if hasattr(dialog.entity, "username")
           else None,
           entity_type=extract_dialog_type(dialog),
-          folder_id=folder_id if folder_id is not None else dialog.folder_id,
+          folder_id=dialog.folder_id,  # System folder (Main=0, Archive=1)
         )
 
-        session.merge(dialog_model)
+        db_dialog = session.merge(dialog_model)
+
+        # Link to all folders this dialog belongs to
+        target_f_ids = peer_to_folders.get(dialog.id, [])
+        for t_f_id in target_f_ids:
+          f_model = session.get(db.Folder, t_f_id)
+          if f_model and f_model not in db_dialog.folders:
+            db_dialog.folders.append(f_model)
+
       session.commit()
     typer.echo(f"✓ Successfully saved {len(dialogs)} chats to database")
 
@@ -193,6 +227,8 @@ def fetch(
   dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
 ):
   """Fetch all dialogs and messages from Telegram and save to database"""
+  if date_from is None and not new_only:
+    date_from = datetime.now() - timedelta(1)
 
   run_async(run_fetch, new_only, date_from, date_to, max_messages, dry_run, folder_id)
 

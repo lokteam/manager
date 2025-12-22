@@ -60,13 +60,29 @@ class DialogType(str, Enum):
   CHANNEL = "Channel"
 
 
+class DialogFolderLink(SQLModel, table=True):
+  dialog_id: int = Field(foreign_key="dialog.id", primary_key=True)
+  folder_id: int = Field(foreign_key="folder.id", primary_key=True)
+
+
+class Folder(SQLModel, table=True):
+  id: int = Field(primary_key=True)
+  name: str = Field(index=True)
+
+  dialogs: list["Dialog"] = Relationship(
+    back_populates="folders", link_model=DialogFolderLink
+  )
+
+
 class Dialog(SQLModel, table=True):
   id: int = Field(primary_key=True)
   entity_type: DialogType
   username: str | None = Field(default=None, index=True)
   name: str | None = Field(default=None, index=True)
-  folder_id: int | None = None
 
+  folders: list[Folder] = Relationship(
+    back_populates="dialogs", link_model=DialogFolderLink
+  )
   messages: list["Message"] = Relationship(back_populates="dialog")
 
 
