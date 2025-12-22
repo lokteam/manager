@@ -13,7 +13,7 @@ shared_root = abspath(dirname(dirname(__file__)))
 if shared_root not in sys.path:
   sys.path.insert(0, shared_root)
 
-from shared.models import SQLModel, DB_URL
+from shared.models import SQLModel, DB_URL  # noqa: E402
 
 
 # this is the Alembic Config object, which provides
