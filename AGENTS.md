@@ -1,48 +1,18 @@
-# You are working on a production-grade personal Agent manager service.
-
-## General rules:
-
-- Prefer clarity over cleverness.
-- Avoid unnecessary abstractions.
-- Write code that can run 24/7 without supervision.
-- Fail loudly and log errors explicitly.
-- Do not introduce scalability patterns unless explicitly requested.
-- Always check the most fresh documentation for the library with Context7 before writing code.
-- Follow the latest rules and styling for libraries. Do not use deprecated or old-fashioned (like in previous library version) methods, syntax, etc.
-
-## Project constraints:
-
-- Typer for CLI.
-- Telethon for Telegram API.
-- PydanticAi for AI agents.
-- SQLite + SQLModel for storing data.
-- Pydantic for all structured data.
-- No global mutable state.
-
-## Style rules:
-
-- 2 space indentation
-- Prefer small functions.
-- One responsibility per file where possible.
-- Explicit is better than implicit.
-- Avoid comments that restate the code.
-- Use docstrings for intent, not implementation.
-- All functions and methods must have type hints.
-
-## Tools:
-
-- Black for formatting.
-- Ruff for linting.
-- MyPy for type checking.
-- uv for package management.
-- Context7 MCP server to fetch documentation.
-- Bright Data MCP server for web search if unsure.
-
-## Package Management with `uv`
-
-These rules define strict guidelines for managing Python dependencies in this project using the `uv` dependency manager.
-
-**Use `uv` exclusively**
-
-- All Python dependencies **must be installed, synchronized, and locked** using `uv`.
-- Never use `pip`, `pip-tools`, or `poetry` directly for dependency management.
+# Agent Guidelines
+**Commands:**
+- Lint: `uv run ruff check .` | Format: `uv run ruff format .`
+- Types: `uv run mypy .` | Tests: `uv run pytest` (Single: `uv run pytest path/to/test.py::test_name`)
+**Code Style:**
+- Indentation: 2 spaces. Line length: 88. No global mutable state.
+- Typing: Modern Python 3.13+ (`int | None`, `list[str]`). NO `List`, `Optional`, or legacy syntax.
+- Documentation: Docstrings for intent. All functions MUST have type hints. No restating comments.
+- Quality: Fail loudly and log explicitly. One responsibility per file. Small functions.
+- Imports: Absolute imports. Grouped: stdlib, third-party, local workspace.
+**Tech Stack & Patterns:**
+- Typer (CLI), Telethon (Telegram), PydanticAI (Agents), SQLModel (SQLite), Pydantic (Data).
+- DB: SQLite + custom JSON serialization for Pydantic (check `shared/models.py`).
+- Rules: Always fetch fresh docs via `Context7`. Follow latest library syntaxes.
+**Development:**
+- Use `uv` EXCLUSIVELY for dependencies. Never use `pip` or `poetry`.
+- Proactively use `Context7` and `Bright Data` for research.
+- Mimic existing styles in `agents/`, `telegram/`, and `shared/` directories.
