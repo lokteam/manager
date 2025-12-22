@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+@theme {
+  /* Color palette - dark brutalist with teal accent */
+  --color-bg-primary: #0a0a0b;
+  --color-bg-secondary: #131316;
+  --color-bg-tertiary: #1a1a1f;
+  --color-bg-elevated: #202027;
+  
+  --color-border: #2a2a33;
+  --color-border-subtle: #1f1f26;
+  
+  --color-text-primary: #f0f0f2;
+  --color-text-secondary: #a0a0a8;
+  --color-text-muted: #606068;
+  
+  --color-accent: #14b8a6;
+  --color-accent-hover: #0d9488;
+  --color-accent-muted: rgba(20, 184, 166, 0.15);
+  
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+  
+  /* Kanban status colors */
+  --color-status-new: #6366f1;
+  --color-status-contact: #8b5cf6;
+  --color-status-ignore: #64748b;
+  --color-status-interview: #f59e0b;
+  --color-status-reject: #ef4444;
+  --color-status-offer: #22c55e;
+  
+  /* Typography */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  
+  /* Spacing */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    margin: 0;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+  }
+  
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 150ms ease;
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+  
+  .btn-primary {
+    background-color: var(--color-accent);
+    color: #000;
+    
+    &:hover:not(:disabled) {
+      background-color: var(--color-accent-hover);
+    }
+  }
+  
+  .btn-secondary {
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+    border-color: var(--color-border);
+    
+    &:hover:not(:disabled) {
+      background-color: var(--color-bg-elevated);
+      border-color: var(--color-accent);
+    }
+  }
+  
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--color-text-secondary);
+    
+    &:hover:not(:disabled) {
+      background-color: var(--color-bg-tertiary);
+      color: var(--color-text-primary);
+    }
+  }
+  
+  .btn-danger {
+    background-color: var(--color-error);
+    color: #fff;
+    
+    &:hover:not(:disabled) {
+      background-color: #dc2626;
+    }
+  }
+  
+  .input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    transition: border-color 150ms ease;
+    
+    &::placeholder {
+      color: var(--color-text-muted);
+    }
+    
+    &:focus {
+      outline: none;
+      border-color: var(--color-accent);
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+  
+  .label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 0.375rem;
+  }
+  
+  .card {
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+  }
+  
+  .error-text {
+    font-size: 0.75rem;
+    color: var(--color-error);
+    margin-top: 0.25rem;
+  }
+}
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
