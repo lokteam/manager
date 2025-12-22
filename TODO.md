@@ -12,7 +12,7 @@
 
 - [x] Check telegram changes manually
 - [x] Add Alembic to `shared` module for database migrations
-- [ ] Add telegram dialogs grouping by folder id (mapping folder names)
+- [x] Add telegram dialogs grouping by folder id (mapping folder names)
 - [ ] Backend Module (FastAPI)
   - [ ] Make plan for backend
   - [ ] Implement JWT-based Auth

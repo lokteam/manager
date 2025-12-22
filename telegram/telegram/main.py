@@ -193,8 +193,6 @@ def fetch(
   dry_run: bool = typer.Option(False, "--dry-run", help="Dry run mode"),
 ):
   """Fetch all dialogs and messages from Telegram and save to database"""
-  if date_from is None and not new_only:
-    date_from = datetime.now() - timedelta(1)
 
   run_async(run_fetch, new_only, date_from, date_to, max_messages, dry_run, folder_id)
 
