@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ from .api.v1.routers import api_router
 from typing import Annotated
 
 app = FastAPI(title="Manager Backend")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # Include API routers
 app.include_router(api_router, prefix="/api/v1")
@@ -67,7 +69,7 @@ async def login(
       headers={"WWW-Authenticate": "Bearer"},
     )
 
-  access_token = create_access_token(data={"sub": user.email})
+  access_token = create_access_token(data={"sub": user.email, "uid": user.id})
   return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -75,7 +77,7 @@ async def login(
 async def google_login():
   async with google_sso:
     return await google_sso.get_login_redirect(
-      redirect_uri="http://localhost:8000/auth/sso/google/callback"
+      redirect_uri=f"{BACKEND_URL}/auth/sso/google/callback"
     )
 
 

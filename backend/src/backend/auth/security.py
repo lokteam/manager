@@ -4,7 +4,12 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from typing import Any
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "unsafe-default-secret-change-me")
+SECRET_KEY = os.environ.get("JWT_SECRET")
+if not SECRET_KEY:
+  if os.environ.get("ENV") == "prod":
+    raise RuntimeError("JWT_SECRET environment variable is required in production")
+  SECRET_KEY = "dev-secret-change-me-in-prod"
+
 ALGORITHM = os.environ.get("JWT_ALG", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
@@ -34,11 +39,8 @@ def get_password_hash(password: str) -> str:
 
 def decode_access_token(token: str) -> dict[str, Any] | None:
   try:
-    decoded_token = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    return (
-      decoded_token
-      if decoded_token["exp"] >= datetime.now(timezone.utc).timestamp()
-      else None
-    )
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    # PyJWT handles expiration validation by default if 'exp' is present
+    return payload
   except jwt.PyJWTError:
     return None

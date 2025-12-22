@@ -21,12 +21,17 @@ async def get_current_user(
   payload = decode_access_token(token)
   if payload is None:
     raise credentials_exception
+  user_id = payload.get("uid")
   email = payload.get("sub")
-  if not isinstance(email, str):
+
+  if user_id:
+    user = await session.get(User, user_id)
+  elif email:
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalars().first()
+  else:
     raise credentials_exception
 
-  result = await session.execute(select(User).where(User.email == email))
-  user = result.scalars().first()
   if user is None:
     raise credentials_exception
   return user

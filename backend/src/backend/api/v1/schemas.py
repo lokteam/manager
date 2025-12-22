@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from shared.models import (
   DialogType,
   PeerType,
@@ -9,9 +9,13 @@ from shared.models import (
 from datetime import datetime
 
 
-class TelegramAccountCreate(BaseModel):
+class SchemaBase(BaseModel):
+  model_config = ConfigDict(from_attributes=True)
+
+
+# TelegramAccount
+class TelegramAccountCreate(SchemaBase):
   id: int
-  user_id: int
   api_id: int
   api_hash: str
   phone: str
@@ -19,21 +23,31 @@ class TelegramAccountCreate(BaseModel):
   username: str | None = None
 
 
-class TelegramAccountUpdate(BaseModel):
+class TelegramAccountUpdate(SchemaBase):
   name: str | None = None
   username: str | None = None
 
 
-class FolderCreate(BaseModel):
-  name: str
+class TelegramAccountRead(TelegramAccountCreate):
   user_id: int
 
 
-class FolderUpdate(BaseModel):
+# Folder
+class FolderCreate(SchemaBase):
   name: str
 
 
-class DialogCreate(BaseModel):
+class FolderUpdate(SchemaBase):
+  name: str
+
+
+class FolderRead(FolderCreate):
+  id: int
+  user_id: int
+
+
+# Dialog
+class DialogCreate(SchemaBase):
   id: int
   account_id: int
   entity_type: DialogType
@@ -41,12 +55,17 @@ class DialogCreate(BaseModel):
   name: str | None = None
 
 
-class DialogUpdate(BaseModel):
+class DialogUpdate(SchemaBase):
   username: str | None = None
   name: str | None = None
 
 
-class MessageCreate(BaseModel):
+class DialogRead(DialogCreate):
+  pass
+
+
+# Message
+class MessageCreate(SchemaBase):
   id: int
   dialog_id: int
   account_id: int
@@ -56,11 +75,16 @@ class MessageCreate(BaseModel):
   date: datetime | None = None
 
 
-class MessageUpdate(BaseModel):
+class MessageUpdate(SchemaBase):
   text: str | None = None
 
 
-class VacancyReviewCreate(BaseModel):
+class MessageRead(MessageCreate):
+  pass
+
+
+# VacancyReview
+class VacancyReviewCreate(SchemaBase):
   message_id: int
   dialog_id: int
   account_id: int
@@ -73,19 +97,31 @@ class VacancyReviewCreate(BaseModel):
   salary_fork_to: int | None = None
 
 
-class VacancyReviewUpdate(BaseModel):
+class VacancyReviewUpdate(SchemaBase):
   decision: VacancyReviewDecision | None = None
   contacts: list[ContactDTO] | None = None
   vacancy_position: str | None = None
   vacancy_description: str | None = None
+  vacancy_requirements: str | None = None
+  salary_fork_from: int | None = None
+  salary_fork_to: int | None = None
 
 
-class VacancyProgressCreate(BaseModel):
+class VacancyReviewRead(VacancyReviewCreate):
+  id: int
+
+
+# VacancyProgress
+class VacancyProgressCreate(SchemaBase):
   review_id: int
   status: VacancyProgressStatus = VacancyProgressStatus.NEW
   comment: str | None = None
 
 
-class VacancyProgressUpdate(BaseModel):
+class VacancyProgressUpdate(SchemaBase):
   status: VacancyProgressStatus | None = None
   comment: str | None = None
+
+
+class VacancyProgressRead(VacancyProgressCreate):
+  id: int
