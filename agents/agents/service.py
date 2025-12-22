@@ -1,11 +1,11 @@
-from shared.models import get_session, VacancyReview
+from shared.models import session_context, VacancyReview
 from .db_ops import get_unreviewed_messages, save_reviews
 from .processor import process_messages
 
 
 async def run_review_cycle(batch_size: int = 10) -> int:
   """Run one cycle of message review. Returns number of messages processed."""
-  with get_session() as session:
+  with session_context() as session:
     messages = get_unreviewed_messages(session, batch_size)
     if not messages:
       return 0

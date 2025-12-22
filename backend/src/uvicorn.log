@@ -1,0 +1,11 @@
+INFO:     Started server process [67080]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55372 - "GET /auth/sso/ HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55374 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:47768 - "GET /auth/sso/google/login HTTP/1.1" 303 See Other
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [67080]

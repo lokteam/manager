@@ -50,7 +50,7 @@ async def get_messages(
     messages.append(message)
 
   if not dry_run and messages:
-    with db.get_session() as session:
+    with db.session_context() as session:
       for message in messages:
         message_model = db.Message(
           id=message.id,
@@ -95,7 +95,7 @@ async def sync_dialogs(folder_id: int | None = None, dry_run: bool = False):
     dialogs = [d for d in dialogs if d.id in included_peer_ids]
 
   if not dry_run:
-    with db.get_session() as session:
+    with db.session_context() as session:
       for f_id, f_obj in all_filters.items():
         folder_model = db.Folder(id=f_id, name=f_obj.title.text)
         session.merge(folder_model)

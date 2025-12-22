@@ -10,7 +10,12 @@ dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["telegram", "agents", "shared"]
+members = [
+    "telegram",
+    "agents",
+    "shared",
+    "backend",
+]
 
 [tool.uv.sources]
 telegram = { workspace = true }
@@ -24,3 +29,10 @@ line-length = 88
 [tool.ruff.format]
 indent-style = "space"
 quote-style = "double"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "ruff>=0.14.10",
+    "types-passlib>=1.7.7.20250602",
+]

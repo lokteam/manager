@@ -1,0 +1,27 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "ceo-s", email = "alex_s_2002@mail.ru" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "bcrypt<4.0.0",
+    "fastapi>=0.127.0",
+    "fastapi-sso>=0.19.0",
+    "fastcrud>=0.20.1",
+    "passlib[bcrypt]>=1.7.4",
+    "pyjwt>=2.10.1",
+    "python-multipart>=0.0.21",
+    "shared",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+shared = { workspace = true, editable = true }
