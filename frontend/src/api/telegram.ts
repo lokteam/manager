@@ -4,6 +4,7 @@ import type {
   TelegramFetchChatsRequest,
   TelegramFetchMessagesRequest,
   TelegramFolderAddRemoveRequest,
+  TelegramFolderBulkAddRemoveRequest,
   TelegramFolderCreateRequest,
   TelegramFolderRenameRequest,
   TelegramFolder,
@@ -31,6 +32,14 @@ export async function addChatToFolder(data: TelegramFolderAddRemoveRequest): Pro
 
 export async function removeChatFromFolder(data: TelegramFolderAddRemoveRequest): Promise<void> {
   return api.post('/telegram/folder/remove', data)
+}
+
+export async function bulkAddChatsToFolder(data: TelegramFolderBulkAddRemoveRequest): Promise<void> {
+  return api.post('/telegram/folder/bulk-add', data)
+}
+
+export async function bulkRemoveChatsFromFolder(data: TelegramFolderBulkAddRemoveRequest): Promise<void> {
+  return api.post('/telegram/folder/bulk-remove', data)
 }
 
 export async function createTelegramFolder(data: TelegramFolderCreateRequest): Promise<TelegramFolder> {

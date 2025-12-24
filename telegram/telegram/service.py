@@ -137,8 +137,8 @@ async def get_folders(client):
   return results
 
 
-async def update_folder_chat(
-  client, folder_id: int, chat_id: int, remove: bool = False
+async def update_folder_chats(
+  client, folder_id: int, chat_ids: list[int], remove: bool = False
 ):
   filters_resp = await client(functions.messages.GetDialogFiltersRequest())
   target_filter = next(
@@ -148,47 +148,58 @@ async def update_folder_chat(
   if not target_filter or not isinstance(target_filter, types.DialogFilter):
     raise ValueError(f"Folder with ID {folder_id} not found.")
 
-  input_peer = await client.get_input_entity(chat_id)
   current_peers = list(target_filter.include_peers)
+  changed = False
 
-  peer_index = -1
-  for i, p in enumerate(current_peers):
-    if (
-      (
-        isinstance(p, types.InputPeerUser)
-        and isinstance(input_peer, types.InputPeerUser)
-        and p.user_id == input_peer.user_id
-      )
-      or (
-        isinstance(p, types.InputPeerChat)
-        and isinstance(input_peer, types.InputPeerChat)
-        and p.chat_id == input_peer.chat_id
-      )
-      or (
-        isinstance(p, types.InputPeerChannel)
-        and isinstance(input_peer, types.InputPeerChannel)
-        and p.channel_id == input_peer.channel_id
-      )
-    ):
-      peer_index = i
-      break
+  for chat_id in chat_ids:
+    try:
+      input_peer = await client.get_input_entity(chat_id)
+    except Exception:
+      continue
 
-  if remove:
-    if peer_index != -1:
-      current_peers.pop(peer_index)
+    peer_index = -1
+    for i, p in enumerate(current_peers):
+      if (
+        (
+          isinstance(p, types.InputPeerUser)
+          and isinstance(input_peer, types.InputPeerUser)
+          and p.user_id == input_peer.user_id
+        )
+        or (
+          isinstance(p, types.InputPeerChat)
+          and isinstance(input_peer, types.InputPeerChat)
+          and p.chat_id == input_peer.chat_id
+        )
+        or (
+          isinstance(p, types.InputPeerChannel)
+          and isinstance(input_peer, types.InputPeerChannel)
+          and p.channel_id == input_peer.channel_id
+        )
+      ):
+        peer_index = i
+        break
+
+    if remove:
+      if peer_index != -1:
+        current_peers.pop(peer_index)
+        changed = True
     else:
-      return False
-  else:
-    if peer_index == -1:
-      current_peers.append(input_peer)
-    else:
-      return False
+      if peer_index == -1:
+        current_peers.append(input_peer)
+        changed = True
 
-  target_filter.include_peers = current_peers
-  await client(
-    functions.messages.UpdateDialogFilterRequest(id=folder_id, filter=target_filter)
-  )
+  if changed:
+    target_filter.include_peers = current_peers
+    await client(
+      functions.messages.UpdateDialogFilterRequest(id=folder_id, filter=target_filter)
+    )
   return True
+
+
+async def update_folder_chat(
+  client, folder_id: int, chat_id: int, remove: bool = False
+):
+  return await update_folder_chats(client, folder_id, [chat_id], remove)
 
 
 async def create_folder(client, title: str, chat_id: int | None = None):

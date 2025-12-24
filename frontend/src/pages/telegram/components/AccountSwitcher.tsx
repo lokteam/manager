@@ -51,8 +51,9 @@ export const AccountSwitcher = ({
   }
 
   return (
-    <Dropdown
-      width="w-80"
+    <div className="no-select">
+      <Dropdown
+        width="w-80"
       trigger={
         <div className="flex w-full items-center justify-between rounded-2xl border-2 border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4 shadow-md transition-all duration-200 hover:border-[var(--color-accent)]/70 hover:bg-[var(--color-bg-tertiary)] group cursor-pointer">
           <div className="flex items-center gap-4">
@@ -63,18 +64,16 @@ export const AccountSwitcher = ({
               <span className="truncate text-base font-extrabold text-[var(--color-text-primary)]">
                 {selectedAccount ? getDisplayName(selectedAccount) : 'Select Account'}
               </span>
-              <div className="flex items-center gap-2">
-                {selectedAccount?.phone && (
-                  <span className="truncate text-xs text-[var(--color-text-muted)] font-bold">
-                    {selectedAccount.phone}
-                  </span>
-                )}
-                {selectedAccount?.username && (
-                  <span className="truncate text-xs text-[var(--color-accent)] font-medium opacity-80">
-                    @{selectedAccount.username}
-                  </span>
-                )}
-              </div>
+              {selectedAccount?.username && (
+                <span className="truncate text-xs text-[var(--color-accent)] font-medium opacity-80">
+                  @{selectedAccount.username}
+                </span>
+              )}
+              {selectedAccount?.phone && (
+                <span className="truncate text-xs text-[var(--color-text-muted)] font-bold">
+                  {selectedAccount.phone}
+                </span>
+              )}
             </div>
           </div>
           <ChevronDown className="h-5 w-5 text-[var(--color-text-muted)] transition-colors group-hover:text-[var(--color-text-secondary)]" />
@@ -98,16 +97,14 @@ export const AccountSwitcher = ({
               </div>
               <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 <span className="truncate font-bold text-sm">{getDisplayName(account)}</span>
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="truncate text-[10px] text-[var(--color-text-muted)] font-medium">
-                    {account.phone}
+                {account.username && (
+                  <span className="truncate text-[10px] text-[var(--color-accent)] opacity-70">
+                    @{account.username}
                   </span>
-                  {account.username && (
-                    <span className="truncate text-[10px] text-[var(--color-accent)] opacity-70">
-                      @{account.username}
-                    </span>
-                  )}
-                </div>
+                )}
+                <span className="truncate text-[10px] text-[var(--color-text-muted)] font-medium">
+                  {account.phone}
+                </span>
               </div>
               
               <button
@@ -134,6 +131,8 @@ export const AccountSwitcher = ({
           <span>Add New Account</span>
         </div>
       </DropdownItem>
-    </Dropdown>
+      </Dropdown>
+    </div>
   )
 }
+

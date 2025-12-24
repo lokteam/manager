@@ -227,6 +227,12 @@ export interface TelegramFolderAddRemoveRequest {
   chat_id: number
 }
 
+export interface TelegramFolderBulkAddRemoveRequest {
+  account_id: number
+  folder_id: number
+  chat_ids: number[]
+}
+
 export interface TelegramFolderCreateRequest {
   account_id: number
   title: string

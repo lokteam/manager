@@ -107,11 +107,9 @@ async def folder_add(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  success = await service.update_folder_chat(
+  await service.update_folder_chat(
     client, params.folder_id, params.chat_id, remove=False
   )
-  if not success:
-    raise HTTPException(status_code=400, detail="Chat already in folder or error")
   return {"status": "success"}
 
 
@@ -122,11 +120,35 @@ async def folder_remove(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  success = await service.update_folder_chat(
+  await service.update_folder_chat(
     client, params.folder_id, params.chat_id, remove=True
   )
-  if not success:
-    raise HTTPException(status_code=400, detail="Chat not in folder or error")
+  return {"status": "success"}
+
+
+@router.post("/folder/bulk-add")
+async def folder_bulk_add(
+  params: schemas.TelegramFolderBulkAddRemoveRequest,
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
+):
+  client = await get_account_client(params.account_id, user.id, session)
+  await service.update_folder_chats(
+    client, params.folder_id, params.chat_ids, remove=False
+  )
+  return {"status": "success"}
+
+
+@router.post("/folder/bulk-remove")
+async def folder_bulk_remove(
+  params: schemas.TelegramFolderBulkAddRemoveRequest,
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
+):
+  client = await get_account_client(params.account_id, user.id, session)
+  await service.update_folder_chats(
+    client, params.folder_id, params.chat_ids, remove=True
+  )
   return {"status": "success"}
 
 

@@ -170,6 +170,12 @@ class TelegramFolderAddRemoveRequest(SchemaBase):
   chat_id: int
 
 
+class TelegramFolderBulkAddRemoveRequest(SchemaBase):
+  account_id: int
+  folder_id: int
+  chat_ids: list[int]
+
+
 class TelegramFolderCreateRequest(SchemaBase):
   account_id: int
   title: str

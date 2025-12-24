@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import type { TelegramFolder } from '@/api/types';
 import { cn } from '@/lib/utils';
 import { Plus, Trash2, X } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 interface FolderListProps {
   folders: TelegramFolder[];
   selectedFolderId: number | null;
+  isDragging?: boolean;
   onSelectFolder: (id: number) => void;
   onCreateFolder: (title: string) => void;
   onRenameFolder: (id: number, title: string) => void;
@@ -17,6 +18,7 @@ const ALL_CHATS_ID = 0;
 export const FolderList: React.FC<FolderListProps> = ({
   folders,
   selectedFolderId,
+  isDragging,
   onSelectFolder,
   onCreateFolder,
   onRenameFolder,
@@ -27,6 +29,34 @@ export const FolderList: React.FC<FolderListProps> = ({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [newFolderTitle, setNewFolderTitle] = useState('');
   const [editTitle, setEditTitle] = useState('');
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const scrollIntervalRef = useRef<number | null>(null);
+
+  const startAutoScroll = (direction: 'left' | 'right') => {
+    if (scrollIntervalRef.current) return;
+    scrollIntervalRef.current = window.setInterval(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollBy({ left: direction === 'left' ? -10 : 10, behavior: 'auto' });
+      }
+    }, 16);
+  };
+
+  const stopAutoScroll = () => {
+    if (scrollIntervalRef.current) {
+      window.clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!isDragging) {
+      stopAutoScroll();
+    }
+  }, [isDragging]);
+
+  useEffect(() => {
+    return () => stopAutoScroll();
+  }, []);
 
   // Determine the active folder ID.
   const activeId = selectedFolderId ?? ALL_CHATS_ID;
@@ -56,15 +86,44 @@ export const FolderList: React.FC<FolderListProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-3 w-full max-w-2xl px-2">
+    <div className="relative w-full max-w-2xl group/list no-select">
+      {/* Edge Fades */}
+      <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-[var(--color-bg-primary)] to-transparent z-20 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[var(--color-bg-primary)] to-transparent z-20 pointer-events-none" />
+
       <div 
         ref={containerRef}
-        className="flex-1 flex items-center gap-3 overflow-x-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="flex items-center gap-3 overflow-x-auto px-8 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        onDragOver={(e) => {
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+
+          const x = e.clientX - rect.left;
+          const threshold = 80;
+
+          if (x < threshold) {
+            startAutoScroll('left');
+          } else if (x > rect.width - threshold) {
+            startAutoScroll('right');
+          } else {
+            stopAutoScroll();
+          }
+        }}
+        onDragLeave={() => {
+          // Note: dragLeave can trigger when moving between children
+          // We'll rely on global dragEnd or specific drop
+        }}
+        onDrop={() => {
+          stopAutoScroll();
+        }}
       >
         {allItems.map((folder) => {
           const isActive = activeId === folder.id;
           const isEditing = editingId === folder.id;
           const canDelete = folder.id !== ALL_CHATS_ID;
+          const isAllChats = folder.id === ALL_CHATS_ID;
+          const isDraggingOverMe = dragOverId === folder.id;
+          const shouldShowTrash = isAllChats && (isDraggingOverMe || isDragging) && selectedFolderId !== null && selectedFolderId !== ALL_CHATS_ID;
           
           if (isEditing) {
             return (
@@ -81,7 +140,29 @@ export const FolderList: React.FC<FolderListProps> = ({
           }
 
           return (
-            <div key={folder.id} className="relative group/folder shrink-0">
+            <div 
+              key={folder.id} 
+              className="relative group/folder shrink-0"
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverId(folder.id);
+              }}
+              onDragLeave={() => {
+                setDragOverId(null);
+              }}
+              onDrop={(e) => {
+                setDragOverId(null);
+                
+                const chatIds = JSON.parse(e.dataTransfer.getData('application/json'));
+                if (folder.id !== ALL_CHATS_ID) {
+                  e.preventDefault();
+                  (window as any).onDropChatsToFolder(chatIds, folder.id);
+                } else if (selectedFolderId !== null && selectedFolderId !== ALL_CHATS_ID) {
+                  e.preventDefault();
+                  (window as any).onRemoveChatsFromFolder(chatIds, selectedFolderId);
+                }
+              }}
+            >
               <button
                 onClick={() => onSelectFolder(folder.id)}
                 onContextMenu={(e) => {
@@ -92,14 +173,25 @@ export const FolderList: React.FC<FolderListProps> = ({
                   }
                 }}
                 className={cn(
-                  "px-6 py-2.5 rounded-2xl text-sm font-black whitespace-nowrap transition-all duration-300 border-2",
-                  isActive 
-                    ? "bg-[var(--color-accent)] text-black border-[var(--color-accent)] shadow-lg scale-105" 
-                    : "bg-[var(--color-bg-tertiary)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-text-muted)] hover:bg-[var(--color-bg-elevated)]"
+                  "px-6 py-2.5 rounded-2xl text-sm font-black whitespace-nowrap transition-all duration-300 border-2 flex items-center gap-2",
+                  shouldShowTrash
+                    ? "bg-[var(--color-error)] border-[var(--color-error)] text-white shadow-[0_0_20px_rgba(239,68,68,0.5)] scale-110"
+                    : isDraggingOverMe && folder.id !== ALL_CHATS_ID
+                      ? "bg-[var(--color-accent)] text-black border-[var(--color-accent)] scale-110 shadow-xl"
+                      : isActive 
+                        ? "bg-[var(--color-accent)] text-black border-[var(--color-accent)] shadow-lg scale-105" 
+                        : "bg-[var(--color-bg-tertiary)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-text-muted)] hover:bg-[var(--color-bg-elevated)]"
                 )}
                 title={folder.id !== ALL_CHATS_ID ? "Right click to rename" : ""}
               >
-                {folder.title}
+                {shouldShowTrash ? (
+                  <>
+                    <Trash2 className={cn("h-4 w-4", isDraggingOverMe ? "animate-bounce" : "animate-pulse")} />
+                    Remove from Folder
+                  </>
+                ) : (
+                  folder.title
+                )}
               </button>
               
               {canDelete && (

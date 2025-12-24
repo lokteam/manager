@@ -7,7 +7,7 @@ import { HttpError } from '@/api/http'
 import { AccountModal } from '@/components/accounts/AccountModal'
 import { useAccounts, useDeleteAccount } from '@/hooks/useAccounts'
 import { useDialogs } from '@/hooks/useDialogs'
-import { useTelegramFolders, useCreateTelegramFolder, useDeleteTelegramFolder, useRenameTelegramFolder } from '@/hooks/useTelegram'
+import { useTelegramFolders, useCreateTelegramFolder, useDeleteTelegramFolder, useRenameTelegramFolder, useBulkAddChatsToFolder, useBulkRemoveChatsFromFolder } from '@/hooks/useTelegram'
 import { AccountSwitcher } from './components/AccountSwitcher'
 import { FolderList } from './components/FolderList'
 import { ChatList } from './components/ChatList'
@@ -15,6 +15,8 @@ import { ChatList } from './components/ChatList'
 export function TelegramPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
+  const [selectedChatIds, setSelectedChatIds] = useState<number[]>([])
+  const [isDragging, setIsDragging] = useState(false)
   
   // Account Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -35,6 +37,53 @@ export function TelegramPage() {
   const createFolderMutation = useCreateTelegramFolder()
   const renameFolderMutation = useRenameTelegramFolder()
   const deleteFolderMutation = useDeleteTelegramFolder()
+  const bulkAddChatsMutation = useBulkAddChatsToFolder()
+  const bulkRemoveChatsMutation = useBulkRemoveChatsFromFolder()
+
+  // Expose onDropChatsToFolder and onRemoveChatsFromFolder to window for components to access
+  useEffect(() => {
+    (window as any).onDropChatsToFolder = (chatIds: number[], folderId: number) => {
+      if (selectedAccountId) {
+        bulkAddChatsMutation.mutate({
+          account_id: selectedAccountId,
+          folder_id: folderId,
+          chat_ids: chatIds
+        }, {
+          onSuccess: () => {
+            setSelectedFolderId(folderId);
+          }
+        })
+      }
+    };
+    (window as any).onRemoveChatsFromFolder = (chatIds: number[], folderId: number) => {
+      if (!selectedAccountId) return;
+
+      const folder = folders.find(f => f.id === folderId);
+      if (folder && folder.chat_ids) {
+        const remainingChats = folder.chat_ids.filter(id => !chatIds.includes(id));
+        
+        if (remainingChats.length === 0) {
+          if (confirm(`Removing all chats from "${folder.title}" will delete the folder. Proceed?`)) {
+            deleteFolderMutation.mutate({ folderId, accountId: selectedAccountId }, {
+              onSuccess: () => {
+                setSelectedFolderId(null);
+              }
+            });
+          }
+          return;
+        }
+      }
+
+      bulkRemoveChatsMutation.mutate({
+        account_id: selectedAccountId,
+        folder_id: folderId,
+        chat_ids: chatIds
+      });
+    };
+    (window as any).setIsDraggingGlobal = (dragging: boolean) => {
+      setIsDragging(dragging);
+    };
+  }, [selectedAccountId, folders])
 
   // Set default account
   useEffect(() => {
@@ -43,10 +92,16 @@ export function TelegramPage() {
     }
   }, [accounts, selectedAccountId])
 
-  // Reset folder when account changes
+  // Reset folder and selection when account changes
   useEffect(() => {
     setSelectedFolderId(null)
+    setSelectedChatIds([])
   }, [selectedAccountId])
+
+  // Reset selection when folder changes
+  useEffect(() => {
+    setSelectedChatIds([])
+  }, [selectedFolderId])
 
   // Filtering
   const filteredDialogs = useMemo(() => {
@@ -149,11 +204,11 @@ export function TelegramPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl min-h-[calc(100vh-4rem)] flex flex-col gap-12 py-8 items-center text-center">
-      <div className="w-full space-y-12">
+    <div className="mx-auto max-w-3xl h-[calc(100vh-7rem)] flex flex-col gap-8 py-4 items-center text-center overflow-hidden">
+      <div className="w-full space-y-8 shrink-0">
         {/* Account Switcher */}
-        <div className="space-y-4 max-w-md mx-auto">
-          <label className="label text-xs font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Active Telegram Account</label>
+        <div className="space-y-2 max-w-md mx-auto">
+          <label className="label text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Active Telegram Account</label>
           <AccountSwitcher
             accounts={accounts}
             selectedAccountId={selectedAccountId}
@@ -165,12 +220,13 @@ export function TelegramPage() {
 
         {/* Folder List */}
         {selectedAccountId && (
-          <div className="space-y-6 w-full">
-            <label className="label text-xs font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Folders</label>
+          <div className="space-y-2 w-full">
+            <label className="label text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Folders</label>
             <div className="flex justify-center">
               <FolderList
                 folders={folders}
                 selectedFolderId={selectedFolderId}
+                isDragging={isDragging}
                 onSelectFolder={setSelectedFolderId}
                 onCreateFolder={handleCreateFolder}
                 onRenameFolder={handleRenameFolder}
@@ -182,12 +238,14 @@ export function TelegramPage() {
       </div>
 
       {/* Chat List */}
-      <div className="w-full max-w-2xl flex-1 overflow-hidden bg-[var(--color-bg-secondary)] rounded-[2rem] border-2 border-[var(--color-border)] shadow-2xl flex flex-col">
+      <div className="w-full max-w-2xl flex-1 min-h-0 bg-[var(--color-bg-secondary)] rounded-[2rem] border-2 border-[var(--color-border)] shadow-2xl flex flex-col overflow-hidden">
         {selectedAccountId ? (
           <div className="flex-1 overflow-y-auto text-left">
             <ChatList
               chats={filteredDialogs}
               isLoading={isLoadingAccounts || isLoadingDialogs}
+              selectedIds={selectedChatIds}
+              onSelectionChange={setSelectedChatIds}
             />
           </div>
         ) : (

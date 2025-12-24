@@ -4,6 +4,7 @@ import {
   type TelegramFetchRequest,
   type TelegramFetchMessagesRequest,
   type TelegramFolderAddRemoveRequest,
+  type TelegramFolderBulkAddRemoveRequest,
   type TelegramFolderCreateRequest,
   type TelegramFolderRenameRequest,
 } from '@/api'
@@ -72,6 +73,38 @@ export function useAddChatToFolder() {
     },
     onError: (err) => {
       error(err instanceof HttpError ? err.message : 'Failed to add chat to folder')
+    },
+  })
+}
+
+export function useBulkAddChatsToFolder() {
+  const queryClient = useQueryClient()
+  const { success, error } = useToast()
+
+  return useMutation({
+    mutationFn: (data: TelegramFolderBulkAddRemoveRequest) => telegramApi.bulkAddChatsToFolder(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['telegramFolders'] })
+      success('Chats added to folder')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to add chats to folder')
+    },
+  })
+}
+
+export function useBulkRemoveChatsFromFolder() {
+  const queryClient = useQueryClient()
+  const { success, error } = useToast()
+
+  return useMutation({
+    mutationFn: (data: TelegramFolderBulkAddRemoveRequest) => telegramApi.bulkRemoveChatsFromFolder(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['telegramFolders'] })
+      success('Chats removed from folder')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to remove chats from folder')
     },
   })
 }
