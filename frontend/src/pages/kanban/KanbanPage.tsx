@@ -23,7 +23,6 @@ import {
 } from '@/api'
 import {
   Button,
-  Card,
   Badge,
   Spinner,
   EmptyState,
@@ -80,7 +79,7 @@ export function KanbanPage() {
 
   // Build cards by joining reviews and progress
   const cardsByStatus = useMemo(() => {
-    if (!reviews || !progressList) return {}
+    if (!reviews || !progressList) return {} as Record<VacancyProgressStatus, KanbanCard[]>
 
     const progressByReviewId = new Map(progressList.map((p) => [p.review_id, p]))
 

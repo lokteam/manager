@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react'
-import { telegramApi, agentsApi, dialogsApi, type Dialog, type TelegramFolder } from '@/api'
+import { telegramApi, agentsApi, dialogsApi, accountsApi, type TelegramAccount } from '@/api'
+import { useDeleteAccount } from '@/hooks/useAccounts'
 import {
   Button,
   Card,
@@ -23,8 +24,9 @@ import {
   Input,
   Spinner,
   useToast,
-  Badge,
 } from '@/components/ui'
+import { AccountModal } from '@/components/accounts/AccountModal'
+import { AccountSwitcher } from '../telegram/components/AccountSwitcher'
 import { HttpError } from '@/api/http'
 import { cn } from '@/lib/utils'
 
@@ -37,19 +39,96 @@ interface AgentState {
 
 export function AgentPage() {
   const [scopeType, setScopeType] = useState<ScopeType>('folder')
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState<string>('')
   const [selectedDialogKey, setSelectedDialogKey] = useState<string>('')
   const [maxMessages, setMaxMessages] = useState<number>(1000)
   const [agentState, setAgentState] = useState<AgentState>({ step: 'idle', message: '' })
+  
+  // Account Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [step, setStep] = useState<'details' | 'code'>('details')
+  const [pendingPhone, setPendingPhone] = useState<string | null>(null)
+  const [editingAccount, setEditingAccount] = useState<TelegramAccount | null>(null)
 
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { success, error } = useToast()
+  
+  const deleteAccountMutation = useDeleteAccount()
+
+  // Account Mutations
+
+  const createMutation = useMutation({
+    mutationFn: accountsApi.createAccount,
+    onSuccess: (_, variables) => {
+      setPendingPhone(variables.phone)
+      setStep('code')
+      success('Code requested. Please check your Telegram or SMS.')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to request code')
+    },
+  })
+
+  const confirmMutation = useMutation({
+    mutationFn: accountsApi.confirmAccount,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      setIsModalOpen(false)
+      setStep('details')
+      setPendingPhone(null)
+      success('Account connected successfully')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to connect account')
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; username?: string } }) =>
+      accountsApi.updateAccount(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      setEditingAccount(null)
+      setIsModalOpen(false)
+      success('Account updated successfully')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to update account')
+    },
+  })
+
+  const handleAddAccount = () => {
+    setEditingAccount(null)
+    setStep('details')
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setEditingAccount(null)
+    setStep('details')
+    setPendingPhone(null)
+  }
 
   // Queries
+  const { data: accounts } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: accountsApi.getAccounts,
+  })
+
+  // Set default account if not selected
+  useEffect(() => {
+    if (accounts?.length && !selectedAccountId) {
+      setSelectedAccountId(accounts[0].id)
+    }
+  }, [accounts, selectedAccountId])
+
   const { data: telegramFolders, isLoading: foldersLoading } = useQuery({
-    queryKey: ['telegramFolders'],
-    queryFn: telegramApi.getTelegramFolders,
+    queryKey: ['telegramFolders', selectedAccountId],
+    queryFn: () => selectedAccountId ? telegramApi.getTelegramFolders(selectedAccountId) : Promise.resolve([]),
+    enabled: !!selectedAccountId,
   })
 
   const { data: dialogs, isLoading: dialogsLoading } = useQuery({
@@ -107,6 +186,11 @@ export function AgentPage() {
   })
 
   const handleRun = () => {
+    if (!selectedAccountId) {
+        error('Please select an account')
+        return
+    }
+
     if (scopeType === 'folder') {
       if (!selectedFolderId) {
         error('Please select a folder')
@@ -114,6 +198,7 @@ export function AgentPage() {
       }
       setAgentState({ step: 'fetching', message: 'Fetching messages from folder...' })
       fetchAllMutation.mutate({
+        account_id: selectedAccountId,
         folder_id: Number(selectedFolderId),
         max_messages: maxMessages,
       })
@@ -125,6 +210,7 @@ export function AgentPage() {
       const [, dialogId] = selectedDialogKey.split(':').map(Number)
       setAgentState({ step: 'fetching', message: 'Fetching messages from dialog...' })
       fetchMessagesMutation.mutate({
+        account_id: selectedAccountId,
         chat_id: dialogId,
         max_messages: maxMessages,
       })
@@ -134,10 +220,11 @@ export function AgentPage() {
   const isRunning = agentState.step === 'fetching' || agentState.step === 'reviewing'
   const isLoading = foldersLoading || dialogsLoading
 
-  const dialogOptions = dialogs?.map((d) => ({
+  const filteredDialogs = dialogs?.filter(d => d.account_id === selectedAccountId) || []
+  const dialogOptions = filteredDialogs.map((d) => ({
     value: `${d.account_id}:${d.id}`,
     label: d.name || `Dialog ${d.id}`,
-  })) || []
+  }))
 
   const folderOptions = telegramFolders?.map((f) => ({
     value: f.id.toString(),
@@ -153,62 +240,79 @@ export function AgentPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-10 py-4">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Agent Configuration</h1>
-        <p className="mt-1 text-[var(--color-text-secondary)]">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-extrabold tracking-tight">Agent Configuration</h1>
+        <p className="text-[var(--color-text-secondary)] text-lg max-w-2xl">
           Configure and run the AI agent to filter job vacancies from your Telegram messages
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-10 lg:grid-cols-2">
         {/* Configuration Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-[var(--color-accent)]" />
+        <Card className="shadow-lg border-[var(--color-border)]/50">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <Bot className="h-6 w-6 text-[var(--color-accent)]" />
               Parse Configuration
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Select what messages to parse for job vacancies
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Scope Type Selection */}
+          <CardContent className="space-y-8 pt-2">
+            {/* Account Switcher */}
             <div className="space-y-3">
-              <label className="label">Parsing Scope</label>
-              <div className="flex gap-3">
+              <label className="label text-xs uppercase tracking-wider opacity-70">Telegram Account</label>
+              <AccountSwitcher
+                accounts={accounts || []}
+                selectedAccountId={selectedAccountId}
+                onSelectAccount={setSelectedAccountId}
+                onAddAccount={handleAddAccount}
+                onDeleteAccount={(id) => {
+                  if (confirm('Delete account?')) {
+                    deleteAccountMutation.mutate(id)
+                  }
+                }}
+              />
+            </div>
+
+            {/* Scope Type Selection */}
+            <div className="space-y-4">
+              <label className="label text-xs uppercase tracking-wider opacity-70">Parsing Scope</label>
+              <div className="flex gap-4">
                 <button
                   type="button"
                   onClick={() => setScopeType('folder')}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-2 rounded-lg border p-4 transition-all',
+                    'flex flex-1 items-center justify-center gap-3 rounded-xl border-2 p-4 transition-all duration-200',
                     scopeType === 'folder'
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-muted)]'
-                      : 'border-[var(--color-border)] hover:border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)]'
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-muted)] scale-[1.02]'
+                      : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)]'
                   )}
                 >
-                  <FolderOpen className="h-5 w-5" />
-                  <span className="font-medium">Folder</span>
+                  <FolderOpen className="h-6 w-6" />
+                  <span className="font-bold">Folder</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setScopeType('dialog')}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-2 rounded-lg border p-4 transition-all',
+                    'flex flex-1 items-center justify-center gap-3 rounded-xl border-2 p-4 transition-all duration-200',
                     scopeType === 'dialog'
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-muted)]'
-                      : 'border-[var(--color-border)] hover:border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)]'
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-muted)] scale-[1.02]'
+                      : 'border-[var(--color-border)] hover:border-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)]'
                   )}
                 >
-                  <MessageSquare className="h-5 w-5" />
-                  <span className="font-medium">Dialog</span>
+                  <MessageSquare className="h-6 w-6" />
+                  <span className="font-bold">Dialog</span>
                 </button>
               </div>
             </div>
 
             {/* Scope Selection */}
+            <div className="space-y-2">
             {scopeType === 'folder' ? (
               <Select
                 label="Select Telegram Folder"
@@ -216,6 +320,7 @@ export function AgentPage() {
                 onChange={(e) => setSelectedFolderId(e.target.value)}
                 options={folderOptions}
                 placeholder="Choose a folder..."
+                disabled={!selectedAccountId}
               />
             ) : (
               <Select
@@ -224,8 +329,10 @@ export function AgentPage() {
                 onChange={(e) => setSelectedDialogKey(e.target.value)}
                 options={dialogOptions}
                 placeholder="Choose a dialog..."
+                disabled={!selectedAccountId}
               />
             )}
+            </div>
 
             {/* Max Messages */}
             <Input
@@ -235,20 +342,21 @@ export function AgentPage() {
               onChange={(e) => setMaxMessages(Number(e.target.value))}
               min={1}
               max={10000}
+              className="bg-[var(--color-bg-tertiary)]/50"
             />
 
             {/* Run Button */}
             <Button
-              className="w-full"
+              className="w-full h-12 text-base font-bold shadow-md"
               onClick={handleRun}
-              disabled={isRunning}
+              disabled={isRunning || !selectedAccountId}
               loading={isRunning}
             >
               {isRunning ? (
                 'Processing...'
               ) : (
                 <>
-                  <Play className="h-4 w-4" />
+                  <Play className="h-5 w-5 fill-current" />
                   Run Agent
                 </>
               )}
@@ -257,34 +365,65 @@ export function AgentPage() {
         </Card>
 
         {/* Status Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Agent Status</CardTitle>
-            <CardDescription>
+        <Card className="shadow-lg border-[var(--color-border)]/50">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl">Agent Status</CardTitle>
+            <CardDescription className="text-sm">
               Current processing status and results
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-2">
             <AgentStatusDisplay state={agentState} onGoToKanban={() => navigate('/kanban')} />
           </CardContent>
         </Card>
       </div>
 
       {/* Info Card */}
-      <Card className="border-[var(--color-accent)]/30 bg-[var(--color-accent-muted)]">
-        <CardContent className="flex items-start gap-4 py-4">
-          <Bot className="mt-0.5 h-6 w-6 text-[var(--color-accent)]" />
-          <div>
-            <h3 className="font-medium text-[var(--color-text-primary)]">How it works</h3>
-            <ol className="mt-2 space-y-1 text-sm text-[var(--color-text-secondary)]">
-              <li>1. Select a folder or specific dialog to parse</li>
-              <li>2. The agent fetches new messages from Telegram</li>
-              <li>3. AI analyzes each message for job vacancy content</li>
-              <li>4. Valid vacancies are added to your Kanban board with status "NEW"</li>
+      <Card className="border-[var(--color-accent)]/30 bg-[var(--color-accent-muted)] rounded-2xl">
+        <CardContent className="flex items-start gap-6 py-6">
+          <div className="p-3 rounded-full bg-[var(--color-accent)]/10">
+            <Bot className="h-8 w-8 text-[var(--color-accent)]" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-bold text-[var(--color-text-primary)] text-lg">How it works</h3>
+            <ol className="grid gap-2 text-sm text-[var(--color-text-secondary)]">
+              <li className="flex gap-2"><span>1.</span> Select a Telegram account and a folder or specific dialog</li>
+              <li className="flex gap-2"><span>2.</span> The agent fetches new messages from Telegram</li>
+              <li className="flex gap-2"><span>3.</span> AI analyzes each message for job vacancy content</li>
+              <li className="flex gap-2"><span>4.</span> Valid vacancies are added to your Kanban board with status "NEW"</li>
             </ol>
           </div>
         </CardContent>
       </Card>
+
+      {/* Account Modal */}
+      <AccountModal
+        open={isModalOpen}
+        onClose={handleCloseModal}
+        step={step}
+        phone={pendingPhone}
+        account={editingAccount}
+        onSubmit={(data) => {
+          if (editingAccount) {
+            updateMutation.mutate({
+              id: editingAccount.id,
+              data: { name: data.name, username: data.username },
+            })
+          } else {
+            createMutation.mutate({
+              api_id: data.api_id,
+              api_hash: data.api_hash,
+              phone: data.phone,
+            })
+          }
+        }}
+        onConfirm={(code) => {
+          if (pendingPhone) {
+            confirmMutation.mutate({ phone: pendingPhone, code })
+          }
+        }}
+        isLoading={createMutation.isPending || confirmMutation.isPending || updateMutation.isPending}
+      />
     </div>
   )
 }
@@ -331,7 +470,7 @@ function AgentStatusDisplay({ state, onGoToKanban }: AgentStatusDisplayProps) {
           const isActive = step.key === state.step
           const isComplete = index < stepIndex || state.step === 'complete'
           const isPending = index > stepIndex
-
+ 
           return (
             <div key={step.key} className="flex items-center gap-4">
               <div
@@ -382,4 +521,3 @@ function AgentStatusDisplay({ state, onGoToKanban }: AgentStatusDisplayProps) {
     </div>
   )
 }
-

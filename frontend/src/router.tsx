@@ -3,10 +3,9 @@ import { AppLayout, AuthLayout, RequireAuth } from '@/components/layout'
 import { LoginPage, RegisterPage } from '@/pages/auth'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
-import { AccountsPage } from '@/pages/accounts/AccountsPage'
-import { FoldersPage } from '@/pages/folders/FoldersPage'
 import { AgentPage } from '@/pages/agent/AgentPage'
 import { KanbanPage } from '@/pages/kanban/KanbanPage'
+import { TelegramPage } from '@/pages/telegram/TelegramPage'
 
 export const router = createBrowserRouter([
   // Public auth routes
@@ -26,10 +25,9 @@ export const router = createBrowserRouter([
       </RequireAuth>
     ),
     children: [
-      { path: '/', element: <Navigate to="/kanban" replace /> },
+      { path: '/', element: <Navigate to="/telegram" replace /> },
+      { path: '/telegram', element: <TelegramPage /> },
       { path: '/kanban', element: <KanbanPage /> },
-      { path: '/accounts', element: <AccountsPage /> },
-      { path: '/folders', element: <FoldersPage /> },
       { path: '/agent', element: <AgentPage /> },
     ],
   },

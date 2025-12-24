@@ -105,6 +105,7 @@ class TelegramAccount(SQLModel, table=True):
   phone: str
   name: str | None = None
   username: str | None = None
+  session_string: str | None = None
 
   user: User = Relationship(back_populates="accounts")
   dialogs: list["Dialog"] = Relationship(back_populates="account")

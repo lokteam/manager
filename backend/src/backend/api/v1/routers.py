@@ -5,9 +5,6 @@ from shared.models import (
   TelegramAccount,
   Folder,
   Dialog,
-  Message,
-  VacancyReview,
-  VacancyProgress,
   get_async_session,
   User,
 )
@@ -16,6 +13,9 @@ from . import schemas
 from .telegram_router import router as telegram_router
 from .agents_router import router as agents_router
 from typing import Annotated
+import asyncio
+from telegram import client as tg_client
+from telegram import service as tg_service
 
 api_router = APIRouter()
 
@@ -65,15 +65,61 @@ async def get_account(
 @api_router.post(
   "/accounts",
   tags=["Accounts"],
-  status_code=status.HTTP_201_CREATED,
-  response_model=schemas.TelegramAccountRead,
 )
 async def create_account(
   data: schemas.TelegramAccountCreate,
   current_user: Annotated[User, Depends(get_current_user)],
+):
+  client = await tg_client.get_client(data.api_id, data.api_hash)
+  # Start the sign-in process in the background
+  asyncio.create_task(tg_client.sign_in_request(client, data.phone))
+  return {"status": "pending", "message": "Code requested"}
+
+
+@api_router.post(
+  "/accounts/confirm",
+  tags=["Accounts"],
+  response_model=schemas.TelegramAccountRead,
+)
+async def confirm_account(
+  data: schemas.TelegramAccountConfirm,
+  current_user: Annotated[User, Depends(get_current_user)],
   session: AsyncSession = Depends(get_async_session),
 ):
-  account = TelegramAccount(**data.model_dump(), user_id=current_user.id)
+  login_res = await tg_client.wait_for_login(data.phone, data.code)
+  if not login_res:
+    raise HTTPException(status_code=400, detail="Failed to login or timeout")
+
+  session_str, me, api_id, api_hash = login_res
+
+  # Check if account already exists
+  result = await session.execute(
+    select(TelegramAccount).where(TelegramAccount.id == me.id)
+  )
+  account = result.scalars().first()
+
+  if account:
+    if account.user_id != current_user.id:
+      raise HTTPException(
+        status_code=400, detail="Account already linked to another user"
+      )
+    # Update existing
+    account.session_string = session_str
+    account.name = (me.first_name or "") + (" " + me.last_name if me.last_name else "")
+    account.username = me.username
+  else:
+    # Create new
+    account = TelegramAccount(
+      id=me.id,
+      user_id=current_user.id,
+      api_id=api_id,
+      api_hash=api_hash,
+      phone=data.phone,
+      session_string=session_str,
+      name=(me.first_name or "") + (" " + me.last_name if me.last_name else ""),
+      username=me.username,
+    )
+
   session.add(account)
   await session.commit()
   await session.refresh(account)
@@ -145,18 +191,13 @@ async def get_folder(
   return folder
 
 
-@api_router.post(
-  "/folders",
-  tags=["Folders"],
-  status_code=status.HTTP_201_CREATED,
-  response_model=schemas.FolderRead,
-)
+@api_router.post("/folders", tags=["Folders"], response_model=schemas.FolderRead)
 async def create_folder(
   data: schemas.FolderCreate,
   current_user: Annotated[User, Depends(get_current_user)],
   session: AsyncSession = Depends(get_async_session),
 ):
-  folder = Folder(**data.model_dump(), user_id=current_user.id)
+  folder = Folder(name=data.name, user_id=current_user.id)
   session.add(folder)
   await session.commit()
   await session.refresh(folder)
@@ -208,9 +249,32 @@ async def get_dialogs(
   current_user: Annotated[User, Depends(get_current_user)],
   session: AsyncSession = Depends(get_async_session),
 ):
-  account_ids = await get_user_account_ids(current_user.id, session)
+  # Get user's accounts
+  result = await session.execute(
+    select(TelegramAccount).where(TelegramAccount.user_id == current_user.id)
+  )
+  accounts = result.scalars().all()
+
+  # Sync each account in parallel
+  async def sync_account(account):
+    try:
+      client = await tg_client.get_client(
+        account.api_id, account.api_hash, account.session_string, account.id
+      )
+      if not client.is_connected():
+        await client.connect()
+      if await client.is_user_authorized():
+        await tg_service.sync_dialogs(client)
+    except Exception as e:
+      print(f"Failed to sync account {account.id}: {e}")
+
+  await asyncio.gather(*(sync_account(acc) for acc in accounts))
+
+  # Return dialogs for all user's accounts
+  account_ids = [acc.id for acc in accounts]
   if not account_ids:
     return []
+
   result = await session.execute(
     select(Dialog).where(Dialog.account_id.in_(account_ids))
   )
@@ -226,420 +290,12 @@ async def get_dialog(
   current_user: Annotated[User, Depends(get_current_user)],
   session: AsyncSession = Depends(get_async_session),
 ):
+  # Check ownership via account
   account = await session.get(TelegramAccount, account_id)
   if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
+    raise HTTPException(status_code=404, detail="Account not found")
 
   dialog = await session.get(Dialog, (id, account_id))
   if not dialog:
     raise HTTPException(status_code=404, detail="Dialog not found")
   return dialog
-
-
-@api_router.post(
-  "/dialogs",
-  tags=["Dialogs"],
-  status_code=status.HTTP_201_CREATED,
-  response_model=schemas.DialogRead,
-)
-async def create_dialog(
-  data: schemas.DialogCreate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, data.account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  dialog = Dialog(**data.model_dump())
-  session.add(dialog)
-  await session.commit()
-  await session.refresh(dialog)
-  return dialog
-
-
-@api_router.patch(
-  "/dialogs/{account_id}/{id}", tags=["Dialogs"], response_model=schemas.DialogRead
-)
-async def update_dialog(
-  account_id: int,
-  id: int,
-  data: schemas.DialogUpdate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  dialog = await session.get(Dialog, (id, account_id))
-  if not dialog:
-    raise HTTPException(status_code=404, detail="Dialog not found")
-
-  for key, value in data.model_dump(exclude_unset=True).items():
-    setattr(dialog, key, value)
-
-  session.add(dialog)
-  await session.commit()
-  await session.refresh(dialog)
-  return dialog
-
-
-@api_router.delete(
-  "/dialogs/{account_id}/{id}", tags=["Dialogs"], status_code=status.HTTP_204_NO_CONTENT
-)
-async def delete_dialog(
-  account_id: int,
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  dialog = await session.get(Dialog, (id, account_id))
-  if not dialog:
-    raise HTTPException(status_code=404, detail="Dialog not found")
-
-  await session.delete(dialog)
-  await session.commit()
-  return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# --- Message ---
-
-
-@api_router.get(
-  "/messages", tags=["Messages"], response_model=list[schemas.MessageRead]
-)
-async def get_messages(
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not account_ids:
-    return []
-  result = await session.execute(
-    select(Message).where(Message.account_id.in_(account_ids))
-  )
-  return list(result.scalars().all())
-
-
-@api_router.get(
-  "/messages/{account_id}/{dialog_id}/{id}",
-  tags=["Messages"],
-  response_model=schemas.MessageRead,
-)
-async def get_message(
-  account_id: int,
-  dialog_id: int,
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  message = await session.get(Message, (id, dialog_id, account_id))
-  if not message:
-    raise HTTPException(status_code=404, detail="Message not found")
-  return message
-
-
-@api_router.post(
-  "/messages",
-  tags=["Messages"],
-  status_code=status.HTTP_201_CREATED,
-  response_model=schemas.MessageRead,
-)
-async def create_message(
-  data: schemas.MessageCreate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, data.account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  message = Message(**data.model_dump())
-  session.add(message)
-  await session.commit()
-  await session.refresh(message)
-  return message
-
-
-@api_router.patch(
-  "/messages/{account_id}/{dialog_id}/{id}",
-  tags=["Messages"],
-  response_model=schemas.MessageRead,
-)
-async def update_message(
-  account_id: int,
-  dialog_id: int,
-  id: int,
-  data: schemas.MessageUpdate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  message = await session.get(Message, (id, dialog_id, account_id))
-  if not message:
-    raise HTTPException(status_code=404, detail="Message not found")
-
-  for key, value in data.model_dump(exclude_unset=True).items():
-    setattr(message, key, value)
-
-  session.add(message)
-  await session.commit()
-  await session.refresh(message)
-  return message
-
-
-@api_router.delete(
-  "/messages/{account_id}/{dialog_id}/{id}",
-  tags=["Messages"],
-  status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_message(
-  account_id: int,
-  dialog_id: int,
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account = await session.get(TelegramAccount, account_id)
-  if not account or account.user_id != current_user.id:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  message = await session.get(Message, (id, dialog_id, account_id))
-  if not message:
-    raise HTTPException(status_code=404, detail="Message not found")
-
-  await session.delete(message)
-  await session.commit()
-  return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# --- VacancyReview ---
-
-
-@api_router.get(
-  "/reviews", tags=["Reviews"], response_model=list[schemas.VacancyReviewRead]
-)
-async def get_reviews(
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not account_ids:
-    return []
-  result = await session.execute(
-    select(VacancyReview).where(VacancyReview.account_id.in_(account_ids))
-  )
-  return list(result.scalars().all())
-
-
-@api_router.get(
-  "/reviews/{id}", tags=["Reviews"], response_model=schemas.VacancyReviewRead
-)
-async def get_review(
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  review = await session.get(VacancyReview, id)
-  if not review:
-    raise HTTPException(status_code=404, detail="Review not found")
-
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this review")
-
-  return review
-
-
-@api_router.post(
-  "/reviews",
-  tags=["Reviews"],
-  status_code=status.HTTP_201_CREATED,
-  response_model=schemas.VacancyReviewRead,
-)
-async def create_review(
-  data: schemas.VacancyReviewCreate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if data.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this account")
-
-  review = VacancyReview(**data.model_dump())
-  session.add(review)
-  await session.commit()
-  await session.refresh(review)
-  return review
-
-
-@api_router.patch(
-  "/reviews/{id}", tags=["Reviews"], response_model=schemas.VacancyReviewRead
-)
-async def update_review(
-  id: int,
-  data: schemas.VacancyReviewUpdate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  review = await session.get(VacancyReview, id)
-  if not review:
-    raise HTTPException(status_code=404, detail="Review not found")
-
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this review")
-
-  for key, value in data.model_dump(exclude_unset=True).items():
-    setattr(review, key, value)
-
-  session.add(review)
-  await session.commit()
-  await session.refresh(review)
-  return review
-
-
-@api_router.delete(
-  "/reviews/{id}", tags=["Reviews"], status_code=status.HTTP_204_NO_CONTENT
-)
-async def delete_review(
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  review = await session.get(VacancyReview, id)
-  if not review:
-    raise HTTPException(status_code=404, detail="Review not found")
-
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this review")
-
-  await session.delete(review)
-  await session.commit()
-  return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-# --- VacancyProgress ---
-
-
-@api_router.get(
-  "/progress", tags=["Progress"], response_model=list[schemas.VacancyProgressRead]
-)
-async def get_progress_list(
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not account_ids:
-    return []
-  result = await session.execute(
-    select(VacancyProgress)
-    .join(VacancyReview)
-    .where(VacancyReview.account_id.in_(account_ids))
-  )
-  return list(result.scalars().all())
-
-
-@api_router.get(
-  "/progress/{id}", tags=["Progress"], response_model=schemas.VacancyProgressRead
-)
-async def get_progress(
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  progress = await session.get(VacancyProgress, id)
-  if not progress:
-    raise HTTPException(status_code=404, detail="Progress not found")
-
-  review = await session.get(VacancyReview, progress.review_id)
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not review or review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this progress")
-
-  return progress
-
-
-@api_router.post(
-  "/progress",
-  tags=["Progress"],
-  status_code=status.HTTP_201_CREATED,
-  response_model=schemas.VacancyProgressRead,
-)
-async def create_progress(
-  data: schemas.VacancyProgressCreate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  review = await session.get(VacancyReview, data.review_id)
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not review or review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this review")
-
-  progress = VacancyProgress(**data.model_dump())
-  session.add(progress)
-  await session.commit()
-  await session.refresh(progress)
-  return progress
-
-
-@api_router.patch(
-  "/progress/{id}", tags=["Progress"], response_model=schemas.VacancyProgressRead
-)
-async def update_progress(
-  id: int,
-  data: schemas.VacancyProgressUpdate,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  progress = await session.get(VacancyProgress, id)
-  if not progress:
-    raise HTTPException(status_code=404, detail="Progress not found")
-
-  review = await session.get(VacancyReview, progress.review_id)
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not review or review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this progress")
-
-  for key, value in data.model_dump(exclude_unset=True).items():
-    setattr(progress, key, value)
-
-  session.add(progress)
-  await session.commit()
-  await session.refresh(progress)
-  return progress
-
-
-@api_router.delete(
-  "/progress/{id}", tags=["Progress"], status_code=status.HTTP_204_NO_CONTENT
-)
-async def delete_progress(
-  id: int,
-  current_user: Annotated[User, Depends(get_current_user)],
-  session: AsyncSession = Depends(get_async_session),
-):
-  progress = await session.get(VacancyProgress, id)
-  if not progress:
-    raise HTTPException(status_code=404, detail="Progress not found")
-
-  review = await session.get(VacancyReview, progress.review_id)
-  account_ids = await get_user_account_ids(current_user.id, session)
-  if not review or review.account_id not in account_ids:
-    raise HTTPException(status_code=403, detail="Not authorized for this progress")
-
-  await session.delete(progress)
-  await session.commit()
-  return Response(status_code=status.HTTP_204_NO_CONTENT)

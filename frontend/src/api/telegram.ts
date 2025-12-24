@@ -5,14 +5,15 @@ import type {
   TelegramFetchMessagesRequest,
   TelegramFolderAddRemoveRequest,
   TelegramFolderCreateRequest,
+  TelegramFolderRenameRequest,
   TelegramFolder,
 } from './types'
 
-export async function fetchAll(data: TelegramFetchRequest = {}): Promise<void> {
+export async function fetchAll(data: TelegramFetchRequest): Promise<void> {
   return api.post('/telegram/fetch', data)
 }
 
-export async function fetchChats(data: TelegramFetchChatsRequest = {}): Promise<void> {
+export async function fetchChats(data: TelegramFetchChatsRequest): Promise<void> {
   return api.post('/telegram/fetch-chats', data)
 }
 
@@ -20,8 +21,8 @@ export async function fetchMessages(data: TelegramFetchMessagesRequest): Promise
   return api.post('/telegram/fetch-messages', data)
 }
 
-export async function getTelegramFolders(): Promise<TelegramFolder[]> {
-  return api.get<TelegramFolder[]>('/telegram/folders')
+export async function getTelegramFolders(accountId: number): Promise<TelegramFolder[]> {
+  return api.get<TelegramFolder[]>(`/telegram/folders?account_id=${accountId}`)
 }
 
 export async function addChatToFolder(data: TelegramFolderAddRemoveRequest): Promise<void> {
@@ -36,7 +37,11 @@ export async function createTelegramFolder(data: TelegramFolderCreateRequest): P
   return api.post<TelegramFolder>('/telegram/folder/create', data)
 }
 
-export async function deleteTelegramFolder(folderId: number): Promise<void> {
-  return api.delete(`/telegram/folder/${folderId}`)
+export async function renameTelegramFolder(data: TelegramFolderRenameRequest): Promise<void> {
+  return api.patch('/telegram/folder/rename', data)
+}
+
+export async function deleteTelegramFolder(folderId: number, accountId: number): Promise<void> {
+  return api.delete(`/telegram/folder/${folderId}?account_id=${accountId}`)
 }
 

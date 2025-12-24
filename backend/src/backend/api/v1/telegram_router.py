@@ -1,32 +1,50 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Any
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 from telegram import service
 from telegram.client import get_client
 from backend.auth.deps import get_current_user
+from shared.models import TelegramAccount, User, get_async_session
 from . import schemas
+from typing import Annotated
 
 router = APIRouter(prefix="/telegram", tags=["Telegram"])
 
 
-async def get_started_client():
-  client = get_client()
+async def get_account_client(account_id: int, user_id: int, session: AsyncSession):
+  result = await session.execute(
+    select(TelegramAccount).where(
+      TelegramAccount.id == account_id, TelegramAccount.user_id == user_id
+    )
+  )
+  account = result.scalars().first()
+  if not account:
+    raise HTTPException(status_code=404, detail="Telegram account not found")
+
+  client = await get_client(
+    account.api_id, account.api_hash, account.session_string, account.id
+  )
   if not client.is_connected():
-    await client.start()
+    await client.connect()
+  if not await client.is_user_authorized():
+    raise HTTPException(status_code=401, detail="Telegram account not authorized")
   return client
 
 
 @router.post("/fetch")
 async def fetch(
   params: schemas.TelegramFetchRequest,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
+  client = await get_account_client(params.account_id, user.id, session)
   dialogs = await service.sync_dialogs(
-    folder_id=params.folder_id, dry_run=params.dry_run
+    client, folder_id=params.folder_id, dry_run=params.dry_run
   )
   results = []
   for dialog in dialogs:
     messages = await service.get_messages(
+      client,
       dialog,
       params.new_only,
       params.max_messages,
@@ -37,31 +55,31 @@ async def fetch(
     results.append(
       {"chat_name": dialog.name, "chat_id": dialog.id, "message_count": len(messages)}
     )
-  return {"status": "success", "data": results}
+  return results
 
 
 @router.post("/fetch-chats")
 async def fetch_chats(
   params: schemas.TelegramFetchChatsRequest,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
+  client = await get_account_client(params.account_id, user.id, session)
   dialogs = await service.sync_dialogs(
-    folder_id=params.folder_id, dry_run=params.dry_run
+    client, folder_id=params.folder_id, dry_run=params.dry_run
   )
-  return {
-    "status": "success",
-    "data": [{"name": d.name, "id": d.id} for d in dialogs],
-  }
+  return [{"name": d.name, "id": d.id} for d in dialogs]
 
 
 @router.post("/fetch-messages")
 async def fetch_messages(
   params: schemas.TelegramFetchMessagesRequest,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
+  client = await get_account_client(params.account_id, user.id, session)
   messages = await service.get_messages(
+    client,
     params.chat_id,
     params.new_only,
     params.max_messages,
@@ -69,34 +87,28 @@ async def fetch_messages(
     params.date_to,
     params.dry_run,
   )
-  return {"status": "success", "message_count": len(messages)}
+  return {"message_count": len(messages)}
 
 
 @router.get("/folders")
 async def get_folders(
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  account_id: int,
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
-  folders = await service.get_folders()
-  results = []
-  from telethon import types
-
-  for f in folders:
-    if isinstance(f, types.DialogFilter):
-      results.append({"id": f.id, "title": f.title.text})
-    elif isinstance(f, types.DialogFilterDefault):
-      results.append({"id": 0, "title": "All Chats"})
-  return {"status": "success", "data": results}
+  client = await get_account_client(account_id, user.id, session)
+  return await service.get_folders(client)
 
 
 @router.post("/folder/add")
 async def folder_add(
   params: schemas.TelegramFolderAddRemoveRequest,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
+  client = await get_account_client(params.account_id, user.id, session)
   success = await service.update_folder_chat(
-    params.folder_id, params.chat_id, remove=False
+    client, params.folder_id, params.chat_id, remove=False
   )
   if not success:
     raise HTTPException(status_code=400, detail="Chat already in folder or error")
@@ -106,11 +118,12 @@ async def folder_add(
 @router.post("/folder/remove")
 async def folder_remove(
   params: schemas.TelegramFolderAddRemoveRequest,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
+  client = await get_account_client(params.account_id, user.id, session)
   success = await service.update_folder_chat(
-    params.folder_id, params.chat_id, remove=True
+    client, params.folder_id, params.chat_id, remove=True
   )
   if not success:
     raise HTTPException(status_code=400, detail="Chat not in folder or error")
@@ -120,18 +133,32 @@ async def folder_remove(
 @router.post("/folder/create")
 async def folder_create(
   params: schemas.TelegramFolderCreateRequest,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
-  new_id = await service.create_folder(params.title, params.chat_id)
-  return {"status": "success", "folder_id": new_id}
+  client = await get_account_client(params.account_id, user.id, session)
+  new_id = await service.create_folder(client, params.title, params.chat_id)
+  return {"id": new_id, "title": params.title}
+
+
+@router.patch("/folder/rename")
+async def folder_rename(
+  params: schemas.TelegramFolderRenameRequest,
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
+):
+  client = await get_account_client(params.account_id, user.id, session)
+  await service.rename_folder(client, params.folder_id, params.title)
+  return {"status": "success", "title": params.title}
 
 
 @router.delete("/folder/{folder_id}")
 async def folder_delete(
   folder_id: int,
-  user: Any = Depends(get_current_user),
-  client: Any = Depends(get_started_client),
+  account_id: int,
+  user: Annotated[User, Depends(get_current_user)],
+  session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
-  await service.delete_folder(folder_id)
+  client = await get_account_client(account_id, user.id, session)
+  await service.delete_folder(client, folder_id)
   return {"status": "success"}

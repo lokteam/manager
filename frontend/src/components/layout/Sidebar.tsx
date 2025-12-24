@@ -1,13 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Users,
-  FolderKanban,
   Bot,
-  Smartphone,
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Send,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -15,9 +13,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useLogout } from '@/hooks/useAuth'
 
 const navItems = [
+  { to: '/telegram', icon: Send, label: 'Telegram' },
   { to: '/kanban', icon: LayoutDashboard, label: 'Kanban' },
-  { to: '/accounts', icon: Smartphone, label: 'Accounts' },
-  { to: '/folders', icon: FolderKanban, label: 'Folders' },
   { to: '/agent', icon: Bot, label: 'Agent' },
 ]
 

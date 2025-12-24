@@ -8,4 +8,5 @@ export { ToastProvider, useToast } from './Toast'
 export { Spinner, LoadingScreen } from './Spinner'
 export { EmptyState } from './EmptyState'
 export { Badge } from './Badge'
+export { Dropdown, DropdownItem } from './Dropdown'
 

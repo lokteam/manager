@@ -61,12 +61,14 @@ export interface TelegramAccount {
 }
 
 export interface TelegramAccountCreate {
-  id: number
   api_id: number
   api_hash: string
   phone: string
-  name?: string
-  username?: string
+}
+
+export interface TelegramAccountConfirm {
+  phone: string
+  code: string
 }
 
 export interface TelegramAccountUpdate {
@@ -194,6 +196,7 @@ export interface VacancyProgressUpdate {
 
 // Telegram Operations
 export interface TelegramFetchRequest {
+  account_id: number
   new_only?: boolean
   date_from?: string
   date_to?: string
@@ -203,11 +206,13 @@ export interface TelegramFetchRequest {
 }
 
 export interface TelegramFetchChatsRequest {
+  account_id: number
   folder_id?: number
   dry_run?: boolean
 }
 
 export interface TelegramFetchMessagesRequest {
+  account_id: number
   chat_id: number
   new_only?: boolean
   date_from?: string
@@ -217,18 +222,27 @@ export interface TelegramFetchMessagesRequest {
 }
 
 export interface TelegramFolderAddRemoveRequest {
+  account_id: number
   folder_id: number
   chat_id: number
 }
 
 export interface TelegramFolderCreateRequest {
+  account_id: number
   title: string
   chat_id?: number
+}
+
+export interface TelegramFolderRenameRequest {
+  account_id: number
+  folder_id: number
+  title: string
 }
 
 export interface TelegramFolder {
   id: number
   title: string
+  chat_ids: number[]
 }
 
 // Agent
@@ -242,4 +256,3 @@ export interface ApiError {
   message: string
   details?: Record<string, string[]>
 }
-

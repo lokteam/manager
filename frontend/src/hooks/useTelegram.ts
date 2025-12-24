@@ -5,14 +5,16 @@ import {
   type TelegramFetchMessagesRequest,
   type TelegramFolderAddRemoveRequest,
   type TelegramFolderCreateRequest,
+  type TelegramFolderRenameRequest,
 } from '@/api'
 import { useToast } from '@/components/ui'
 import { HttpError } from '@/api/http'
 
-export function useTelegramFolders() {
+export function useTelegramFolders(accountId: number | null) {
   return useQuery({
-    queryKey: ['telegramFolders'],
-    queryFn: telegramApi.getTelegramFolders,
+    queryKey: ['telegramFolders', accountId],
+    queryFn: () => accountId ? telegramApi.getTelegramFolders(accountId) : Promise.resolve([]),
+    enabled: !!accountId,
   })
 }
 
@@ -20,7 +22,7 @@ export function useFetchAll() {
   const { success, error } = useToast()
 
   return useMutation({
-    mutationFn: (data: TelegramFetchRequest = {}) => telegramApi.fetchAll(data),
+    mutationFn: (data: TelegramFetchRequest) => telegramApi.fetchAll(data),
     onSuccess: () => {
       success('Messages synced successfully')
     },
@@ -35,7 +37,7 @@ export function useFetchChats() {
   const { success, error } = useToast()
 
   return useMutation({
-    mutationFn: telegramApi.fetchChats,
+    mutationFn: (data: any) => telegramApi.fetchChats(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dialogs'] })
       success('Chats synced successfully')
@@ -104,12 +106,28 @@ export function useCreateTelegramFolder() {
   })
 }
 
+export function useRenameTelegramFolder() {
+  const queryClient = useQueryClient()
+  const { success, error } = useToast()
+
+  return useMutation({
+    mutationFn: (data: TelegramFolderRenameRequest) => telegramApi.renameTelegramFolder(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['telegramFolders'] })
+      success('Telegram folder renamed')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to rename Telegram folder')
+    },
+  })
+}
+
 export function useDeleteTelegramFolder() {
   const queryClient = useQueryClient()
   const { success, error } = useToast()
 
   return useMutation({
-    mutationFn: (folderId: number) => telegramApi.deleteTelegramFolder(folderId),
+    mutationFn: ({ folderId, accountId }: { folderId: number; accountId: number }) => telegramApi.deleteTelegramFolder(folderId, accountId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['telegramFolders'] })
       success('Telegram folder deleted')
@@ -119,4 +137,3 @@ export function useDeleteTelegramFolder() {
     },
   })
 }
-

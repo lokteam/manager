@@ -2,10 +2,10 @@ from datetime import datetime, timedelta
 from telethon import functions, types
 from shared import models as db
 from .converters import extract_dialog_type, extract_peer_type, extract_peer_id
-from .client import get_client
 
 
 async def get_messages(
+  client,
   dialog,
   new_only: bool,
   max_messages: int | None,
@@ -13,7 +13,6 @@ async def get_messages(
   date_to: datetime | None,
   dry_run: bool = False,
 ):
-  client = get_client()
   if isinstance(dialog, int):
     dialogs = await client.get_dialogs(limit=None)
     dialog = next(d for d in dialogs if d.id == dialog)
@@ -50,11 +49,13 @@ async def get_messages(
     messages.append(message)
 
   if not dry_run and messages:
+    account_id = getattr(client, "account_id", None)
     with db.session_context() as session:
       for message in messages:
         message_model = db.Message(
           id=message.id,
           dialog_id=dialog.id,
+          account_id=account_id,
           from_id=extract_peer_id(message),
           from_type=extract_peer_type(message),
           text=message.message,
@@ -67,83 +68,78 @@ async def get_messages(
   return messages
 
 
-async def sync_dialogs(folder_id: int | None = None, dry_run: bool = False):
-  client = get_client()
-  filters_resp = await client(functions.messages.GetDialogFiltersRequest())
-  all_filters = {
-    f.id: f for f in filters_resp.filters if isinstance(f, types.DialogFilter)
-  }
-
-  included_peer_ids = []
-  target_filter = None
-  if folder_id is not None:
-    target_filter = all_filters.get(folder_id)
-    if not target_filter:
-      raise ValueError(f"Folder with ID {folder_id} not found.")
-
-    for peer in target_filter.include_peers:
-      if isinstance(peer, types.InputPeerUser):
-        included_peer_ids.append(peer.user_id)
-      elif isinstance(peer, types.InputPeerChat):
-        included_peer_ids.append(peer.chat_id)
-      elif isinstance(peer, types.InputPeerChannel):
-        included_peer_ids.append(int("-100" + str(peer.channel_id)))
-
+async def sync_dialogs(client, folder_id: int | None = None, dry_run: bool = False):
+  """Fetch dialogs and save to local DB"""
   dialogs = await client.get_dialogs(limit=None)
 
   if folder_id is not None:
+    # If folder_id is provided, we filter by that folder's peers
+    filters_resp = await client(functions.messages.GetDialogFiltersRequest())
+    target_filter = next(
+      (f for f in filters_resp.filters if getattr(f, "id", None) == folder_id), None
+    )
+    if not target_filter:
+      raise ValueError(f"Folder with ID {folder_id} not found.")
+
+    included_peer_ids = []
+    if hasattr(target_filter, "include_peers"):
+      for peer in target_filter.include_peers:
+        if isinstance(peer, types.InputPeerUser):
+          included_peer_ids.append(peer.user_id)
+        elif isinstance(peer, types.InputPeerChat):
+          included_peer_ids.append(peer.chat_id)
+        elif isinstance(peer, types.InputPeerChannel):
+          included_peer_ids.append(int("-100" + str(peer.channel_id)))
+
     dialogs = [d for d in dialogs if d.id in included_peer_ids]
 
   if not dry_run:
+    account_id = getattr(client, "account_id", None)
+    if not account_id:
+      return dialogs
+
     with db.session_context() as session:
-      for f_id, f_obj in all_filters.items():
-        folder_model = db.Folder(id=f_id, name=f_obj.title.text)
-        session.merge(folder_model)
-      session.commit()
-
-      peer_to_folders: dict[int, list[int]] = {}
-      for f_id, f_obj in all_filters.items():
-        for peer in f_obj.include_peers:
-          p_id = None
-          if isinstance(peer, types.InputPeerUser):
-            p_id = peer.user_id
-          elif isinstance(peer, types.InputPeerChat):
-            p_id = peer.chat_id
-          elif isinstance(peer, types.InputPeerChannel):
-            p_id = int("-100" + str(peer.channel_id))
-          if p_id:
-            if p_id not in peer_to_folders:
-              peer_to_folders[p_id] = []
-            peer_to_folders[p_id].append(f_id)
-
       for dialog in dialogs:
         dialog_model = db.Dialog(
           id=dialog.id,
+          account_id=account_id,
           name=dialog.name,
           username=dialog.entity.username
           if hasattr(dialog.entity, "username")
           else None,
           entity_type=extract_dialog_type(dialog),
         )
-        db_dialog = session.merge(dialog_model)
-        target_f_ids = peer_to_folders.get(dialog.id, [])
-        for t_f_id in target_f_ids:
-          f_model = session.get(db.Folder, t_f_id)
-          if f_model and f_model not in db_dialog.folders:
-            db_dialog.folders.append(f_model)
+        session.merge(dialog_model)
       session.commit()
 
   return dialogs
 
 
-async def get_folders():
-  client = get_client()
-  filters = await client(functions.messages.GetDialogFiltersRequest())
-  return filters.filters
+async def get_folders(client):
+  """Get Telegram dialog filters (folders) with their peer IDs"""
+  filters_resp = await client(functions.messages.GetDialogFiltersRequest())
+  results = []
+  for f in filters_resp.filters:
+    chat_ids = []
+    if hasattr(f, "include_peers"):
+      for peer in f.include_peers:
+        if isinstance(peer, types.InputPeerUser):
+          chat_ids.append(peer.user_id)
+        elif isinstance(peer, types.InputPeerChat):
+          chat_ids.append(peer.chat_id)
+        elif isinstance(peer, types.InputPeerChannel):
+          chat_ids.append(int("-100" + str(peer.channel_id)))
+
+    if isinstance(f, types.DialogFilter):
+      results.append({"id": f.id, "title": f.title.text, "chat_ids": chat_ids})
+    elif isinstance(f, types.DialogFilterDefault):
+      results.append({"id": 0, "title": "All Chats", "chat_ids": []})
+  return results
 
 
-async def update_folder_chat(folder_id: int, chat_id: int, remove: bool = False):
-  client = get_client()
+async def update_folder_chat(
+  client, folder_id: int, chat_id: int, remove: bool = False
+):
   filters_resp = await client(functions.messages.GetDialogFiltersRequest())
   target_filter = next(
     (f for f in filters_resp.filters if getattr(f, "id", None) == folder_id), None
@@ -195,8 +191,7 @@ async def update_folder_chat(folder_id: int, chat_id: int, remove: bool = False)
   return True
 
 
-async def create_folder(title: str, chat_id: int | None = None):
-  client = get_client()
+async def create_folder(client, title: str, chat_id: int | None = None):
   if chat_id is None:
     me = await client.get_me()
     chat_id = me.id
@@ -220,7 +215,22 @@ async def create_folder(title: str, chat_id: int | None = None):
   return new_id
 
 
-async def delete_folder(folder_id: int):
-  client = get_client()
+async def delete_folder(client, folder_id: int):
   await client(functions.messages.UpdateDialogFilterRequest(id=folder_id, filter=None))
+  return True
+
+
+async def rename_folder(client, folder_id: int, new_title: str):
+  filters_resp = await client(functions.messages.GetDialogFiltersRequest())
+  target_filter = next(
+    (f for f in filters_resp.filters if getattr(f, "id", None) == folder_id), None
+  )
+
+  if not target_filter or not isinstance(target_filter, types.DialogFilter):
+    raise ValueError(f"Folder with ID {folder_id} not found.")
+
+  target_filter.title = types.TextWithEntities(text=new_title, entities=[])
+  await client(
+    functions.messages.UpdateDialogFilterRequest(id=folder_id, filter=target_filter)
+  )
   return True

@@ -15,12 +15,14 @@ class SchemaBase(BaseModel):
 
 # TelegramAccount
 class TelegramAccountCreate(SchemaBase):
-  id: int
   api_id: int
   api_hash: str
   phone: str
-  name: str | None = None
-  username: str | None = None
+
+
+class TelegramAccountConfirm(SchemaBase):
+  phone: str
+  code: str
 
 
 class TelegramAccountUpdate(SchemaBase):
@@ -28,8 +30,14 @@ class TelegramAccountUpdate(SchemaBase):
   username: str | None = None
 
 
-class TelegramAccountRead(TelegramAccountCreate):
+class TelegramAccountRead(SchemaBase):
+  id: int
   user_id: int
+  api_id: int
+  api_hash: str
+  phone: str
+  name: str | None = None
+  username: str | None = None
 
 
 # Folder
@@ -131,6 +139,7 @@ class VacancyProgressRead(VacancyProgressCreate):
 
 
 class TelegramFetchRequest(SchemaBase):
+  account_id: int
   new_only: bool = True
   date_from: datetime | None = None
   date_to: datetime | None = None
@@ -140,11 +149,13 @@ class TelegramFetchRequest(SchemaBase):
 
 
 class TelegramFetchChatsRequest(SchemaBase):
+  account_id: int
   folder_id: int | None = None
   dry_run: bool = False
 
 
 class TelegramFetchMessagesRequest(SchemaBase):
+  account_id: int
   chat_id: int
   new_only: bool = True
   date_from: datetime | None = None
@@ -154,13 +165,21 @@ class TelegramFetchMessagesRequest(SchemaBase):
 
 
 class TelegramFolderAddRemoveRequest(SchemaBase):
+  account_id: int
   folder_id: int
   chat_id: int
 
 
 class TelegramFolderCreateRequest(SchemaBase):
+  account_id: int
   title: str
   chat_id: int | None = None
+
+
+class TelegramFolderRenameRequest(SchemaBase):
+  account_id: int
+  folder_id: int
+  title: str
 
 
 class AgentReviewRequest(SchemaBase):

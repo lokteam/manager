@@ -1,10 +1,29 @@
 import typer
 from datetime import datetime
 from telethon import types
-from telegram.telegram import service
-from telegram.telegram.client import run_async
+from telegram import service
+from telegram.client import run_async, get_client
+from shared.models import TelegramAccount, session_context
+from sqlmodel import select
 
 app = typer.Typer(name="telegram")
+
+
+async def get_default_client():
+  with session_context() as session:
+    result = session.execute(select(TelegramAccount))
+    account = result.scalars().first()
+    if not account:
+      raise ValueError(
+        "No Telegram accounts found in database. Add one via web UI first."
+      )
+
+    client = await get_client(
+      account.api_id, account.api_hash, account.session_string, account.id
+    )
+    if not client.is_connected():
+      await client.connect()
+    return client
 
 
 @app.command()
@@ -21,11 +40,12 @@ def fetch(
   """Fetch all dialogs and messages from Telegram and save to database"""
 
   async def run():
-    dialogs = await service.sync_dialogs(folder_id=folder_id, dry_run=dry_run)
+    client = await get_default_client()
+    dialogs = await service.sync_dialogs(client, folder_id=folder_id, dry_run=dry_run)
     for dialog in dialogs:
       typer.echo(f"Processing chat: {dialog.name} (ID: {dialog.id})")
       messages = await service.get_messages(
-        dialog, new_only, max_messages, date_from, date_to, dry_run=dry_run
+        client, dialog, new_only, max_messages, date_from, date_to, dry_run=dry_run
       )
       if messages:
         typer.echo(f"  ✓ Found {len(messages)} messages")
@@ -47,7 +67,8 @@ def fetch_chats(
   """Fetch all chats from Telegram and save to database"""
 
   async def run():
-    dialogs = await service.sync_dialogs(folder_id=folder_id, dry_run=dry_run)
+    client = await get_default_client()
+    dialogs = await service.sync_dialogs(client, folder_id=folder_id, dry_run=dry_run)
     for d in dialogs:
       typer.echo(f"Chat: {d.name} (ID: {d.id})")
 
@@ -68,8 +89,9 @@ def fetch_messages(
   """Parse messages from a specific chat by its ID and save to database"""
 
   async def run():
+    client = await get_default_client()
     messages = await service.get_messages(
-      chat_id, new_only, max_messages, date_from, date_to, dry_run
+      client, chat_id, new_only, max_messages, date_from, date_to, dry_run=dry_run
     )
     for msg in messages:
       text = (msg.message or "").replace("\n", " ")
@@ -83,7 +105,8 @@ def folders():
   """List all dialog folders (Dialog Filters)"""
 
   async def run():
-    filters = await service.get_folders()
+    client = await get_default_client()
+    filters = await service.get_folders(client)
     for f in filters:
       if isinstance(f, types.DialogFilter):
         typer.echo(f"ID: {f.id} | Title: {f.title.text}")
@@ -99,7 +122,12 @@ def folder_add(
   chat_id: int = typer.Argument(..., help="Chat ID to add"),
 ):
   """Add a chat to a specific folder"""
-  if run_async(service.update_folder_chat, folder_id, chat_id, remove=False):
+
+  async def run():
+    client = await get_default_client()
+    return await service.update_folder_chat(client, folder_id, chat_id, remove=False)
+
+  if run_async(run):
     typer.echo("✓ Folder updated successfully")
   else:
     typer.echo("Chat already in folder or error occurred")
@@ -111,7 +139,12 @@ def folder_remove(
   chat_id: int = typer.Argument(..., help="Chat ID to remove"),
 ):
   """Remove a chat from a specific folder"""
-  if run_async(service.update_folder_chat, folder_id, chat_id, remove=True):
+
+  async def run():
+    client = await get_default_client()
+    return await service.update_folder_chat(client, folder_id, chat_id, remove=True)
+
+  if run_async(run):
     typer.echo("✓ Folder updated successfully")
   else:
     typer.echo("Chat not in folder or error occurred")
@@ -125,7 +158,12 @@ def folder_create(
   ),
 ):
   """Create a new dialog folder"""
-  new_id = run_async(service.create_folder, title, chat_id)
+
+  async def run():
+    client = await get_default_client()
+    return await service.create_folder(client, title, chat_id)
+
+  new_id = run_async(run)
   typer.echo(f"✓ Folder '{title}' created with ID {new_id}")
 
 
@@ -134,5 +172,10 @@ def folder_delete(
   folder_id: int = typer.Argument(..., help="Folder ID to delete"),
 ):
   """Delete a dialog folder (does NOT delete chats within it)"""
-  run_async(service.delete_folder, folder_id)
+
+  async def run():
+    client = await get_default_client()
+    return await service.delete_folder(client, folder_id)
+
+  run_async(run)
   typer.echo(f"✓ Folder with ID {folder_id} deleted successfully")
