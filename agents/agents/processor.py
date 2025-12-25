@@ -1,4 +1,3 @@
-from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from shared.models import Message, VacancyReviewDecision, ContactDTO
@@ -27,28 +26,18 @@ class BatchReviewOutput(BaseModel):
   reviews: list[MessageReviewOutput]
 
 
-def load_prompt(name: str) -> str:
-  """Load prompt from md file."""
-  path = Path(__file__).parent / "prompts" / f"{name}.md"
-  return path.read_text(encoding="utf-8")
+def get_agent(system_prompt: str) -> Agent[None, BatchReviewOutput]:
+  """Create an agent with the given system prompt."""
+  return Agent(
+    "google-gla:gemini-3-flash-preview",
+    output_type=BatchReviewOutput,
+    system_prompt=system_prompt,
+  )
 
 
-_agent: Agent[None, BatchReviewOutput] | None = None
-
-
-def get_agent() -> Agent[None, BatchReviewOutput]:
-  """Lazy initialize the agent."""
-  global _agent
-  if _agent is None:
-    _agent = Agent(
-      "google-gla:gemini-3-flash-preview",
-      output_type=BatchReviewOutput,
-      system_prompt=load_prompt("reviewer"),
-    )
-  return _agent
-
-
-async def process_messages(messages: list[Message]) -> BatchReviewOutput:
+async def process_messages(
+  messages: list[Message], system_prompt: str
+) -> BatchReviewOutput:
   """Process a batch of messages using the AI agent."""
   if not messages:
     return BatchReviewOutput(reviews=[])
@@ -57,6 +46,6 @@ async def process_messages(messages: list[Message]) -> BatchReviewOutput:
   for msg in messages:
     prompt += f"ID: {msg.id}\nText: {msg.text}\n---\n"
 
-  agent = get_agent()
+  agent = get_agent(system_prompt)
   result = await agent.run(prompt)
   return result.output

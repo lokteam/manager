@@ -95,6 +95,7 @@ class User(SQLModel, table=True):
 
   accounts: list["TelegramAccount"] = Relationship(back_populates="user")
   folders: list["Folder"] = Relationship(back_populates="user")
+  prompts: list["Prompt"] = Relationship(back_populates="user")
 
 
 class TelegramAccount(SQLModel, table=True):
@@ -255,3 +256,13 @@ class VacancyProgress(SQLModel, table=True):
   comment: str | None = None
 
   review: VacancyReview = Relationship(back_populates="vacancy")
+
+
+class Prompt(SQLModel, table=True):
+  id: int | None = Field(default=None, primary_key=True)
+  user_id: int = Field(foreign_key="user.id")
+  name: str = Field(index=True)
+  description: str | None = None
+  content: str
+
+  user: User = Relationship(back_populates="prompts")

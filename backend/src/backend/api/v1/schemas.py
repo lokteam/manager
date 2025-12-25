@@ -40,6 +40,24 @@ class TelegramAccountRead(SchemaBase):
   username: str | None = None
 
 
+# Prompt
+class PromptCreate(SchemaBase):
+  name: str
+  description: str | None = None
+  content: str
+
+
+class PromptUpdate(SchemaBase):
+  name: str | None = None
+  description: str | None = None
+  content: str | None = None
+
+
+class PromptRead(PromptCreate):
+  id: int
+  user_id: int
+
+
 # Folder
 class FolderCreate(SchemaBase):
   name: str
@@ -189,4 +207,9 @@ class TelegramFolderRenameRequest(SchemaBase):
 
 
 class AgentReviewRequest(SchemaBase):
+  prompt_id: int
   max_messages: int | None = None
+  new_only: bool = True
+  account_id: int | None = None
+  chat_id: int | None = None
+  folder_id: int | None = None

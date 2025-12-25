@@ -8,4 +8,4 @@ export * as telegramApi from './telegram'
 export * as reviewsApi from './reviews'
 export * as progressApi from './progress'
 export * as agentsApi from './agents'
-
+export * as promptsApi from './prompts'

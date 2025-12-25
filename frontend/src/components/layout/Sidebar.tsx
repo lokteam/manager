@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Send,
+  BookOpen,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -16,6 +17,7 @@ const navItems = [
   { to: '/telegram', icon: Send, label: 'Telegram' },
   { to: '/kanban', icon: LayoutDashboard, label: 'Kanban' },
   { to: '/agent', icon: Bot, label: 'Agent' },
+  { to: '/prompts', icon: BookOpen, label: 'Prompts' },
 ]
 
 export function Sidebar() {
@@ -92,4 +94,3 @@ export function Sidebar() {
     </aside>
   )
 }
-

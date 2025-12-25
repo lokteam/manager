@@ -253,7 +253,12 @@ export interface TelegramFolder {
 
 // Agent
 export interface AgentReviewRequest {
+  prompt_id: number
   max_messages?: number
+  new_only?: boolean
+  account_id?: number
+  chat_id?: number
+  folder_id?: number
 }
 
 // API Error

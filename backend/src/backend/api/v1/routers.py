@@ -12,6 +12,7 @@ from backend.auth.deps import get_current_user
 from . import schemas
 from .telegram_router import router as telegram_router
 from .agents_router import router as agents_router
+from .prompts_router import router as prompts_router
 from typing import Annotated
 import asyncio
 from telegram import client as tg_client
@@ -22,6 +23,7 @@ api_router = APIRouter()
 # Telegram and Agents Routers
 api_router.include_router(telegram_router)
 api_router.include_router(agents_router)
+api_router.include_router(prompts_router)
 
 
 # Helper to get user's account IDs for hierarchical filtering

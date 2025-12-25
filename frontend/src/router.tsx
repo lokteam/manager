@@ -6,6 +6,7 @@ import { ForbiddenPage } from '@/pages/ForbiddenPage'
 import { AgentPage } from '@/pages/agent/AgentPage'
 import { KanbanPage } from '@/pages/kanban/KanbanPage'
 import { TelegramPage } from '@/pages/telegram/TelegramPage'
+import { PromptsPage } from '@/pages/prompts/PromptsPage'
 
 export const router = createBrowserRouter([
   // Public auth routes
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: '/telegram', element: <TelegramPage /> },
       { path: '/kanban', element: <KanbanPage /> },
       { path: '/agent', element: <AgentPage /> },
+      { path: '/prompts', element: <PromptsPage /> },
     ],
   },
 

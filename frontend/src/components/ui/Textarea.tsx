@@ -4,14 +4,15 @@ import { cn } from '@/lib/utils'
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string
   label?: string
+  containerClassName?: string
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, error, label, id, ...props }, ref) => {
+  ({ className, error, label, id, containerClassName, ...props }, ref) => {
     const textareaId = id || props.name
 
     return (
-      <div className="w-full">
+      <div className={cn("w-full", containerClassName)}>
         {label && (
           <label htmlFor={textareaId} className="label">
             {label}
