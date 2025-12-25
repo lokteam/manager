@@ -11,6 +11,8 @@ interface FolderListProps {
   onCreateFolder: (title: string) => void;
   onRenameFolder: (id: number, title: string) => void;
   onDeleteFolder: (id: number) => void;
+  onDropChatsToFolder: (chatIds: number[], folderId: number) => void;
+  onRemoveChatsFromFolder: (chatIds: number[], folderId: number) => void;
 }
 
 const ALL_CHATS_ID = 0;
@@ -23,6 +25,8 @@ export const FolderList: React.FC<FolderListProps> = ({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onDropChatsToFolder,
+  onRemoveChatsFromFolder,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -150,18 +154,19 @@ export const FolderList: React.FC<FolderListProps> = ({
               onDragLeave={() => {
                 setDragOverId(null);
               }}
-              onDrop={(e) => {
+               onDrop={(e) => {
                 setDragOverId(null);
                 
                 const chatIds = JSON.parse(e.dataTransfer.getData('application/json'));
                 if (folder.id !== ALL_CHATS_ID) {
                   e.preventDefault();
-                  (window as any).onDropChatsToFolder(chatIds, folder.id);
+                  onDropChatsToFolder(chatIds, folder.id);
                 } else if (selectedFolderId !== null && selectedFolderId !== ALL_CHATS_ID) {
                   e.preventDefault();
-                  (window as any).onRemoveChatsFromFolder(chatIds, selectedFolderId);
+                  onRemoveChatsFromFolder(chatIds, selectedFolderId);
                 }
               }}
+
             >
               <button
                 onClick={() => onSelectFolder(folder.id)}

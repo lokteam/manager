@@ -40,50 +40,45 @@ export function TelegramPage() {
   const bulkAddChatsMutation = useBulkAddChatsToFolder()
   const bulkRemoveChatsMutation = useBulkRemoveChatsFromFolder()
 
-  // Expose onDropChatsToFolder and onRemoveChatsFromFolder to window for components to access
-  useEffect(() => {
-    (window as any).onDropChatsToFolder = (chatIds: number[], folderId: number) => {
-      if (selectedAccountId) {
-        bulkAddChatsMutation.mutate({
-          account_id: selectedAccountId,
-          folder_id: folderId,
-          chat_ids: chatIds
-        }, {
-          onSuccess: () => {
-            setSelectedFolderId(folderId);
-          }
-        })
-      }
-    };
-    (window as any).onRemoveChatsFromFolder = (chatIds: number[], folderId: number) => {
-      if (!selectedAccountId) return;
-
-      const folder = folders.find(f => f.id === folderId);
-      if (folder && folder.chat_ids) {
-        const remainingChats = folder.chat_ids.filter(id => !chatIds.includes(id));
-        
-        if (remainingChats.length === 0) {
-          if (confirm(`Removing all chats from "${folder.title}" will delete the folder. Proceed?`)) {
-            deleteFolderMutation.mutate({ folderId, accountId: selectedAccountId }, {
-              onSuccess: () => {
-                setSelectedFolderId(null);
-              }
-            });
-          }
-          return;
-        }
-      }
-
-      bulkRemoveChatsMutation.mutate({
+  const handleDropChatsToFolder = (chatIds: number[], folderId: number) => {
+    if (selectedAccountId) {
+      bulkAddChatsMutation.mutate({
         account_id: selectedAccountId,
         folder_id: folderId,
         chat_ids: chatIds
-      });
-    };
-    (window as any).setIsDraggingGlobal = (dragging: boolean) => {
-      setIsDragging(dragging);
-    };
-  }, [selectedAccountId, folders])
+      }, {
+        onSuccess: () => {
+          setSelectedFolderId(folderId);
+        }
+      })
+    }
+  };
+
+  const handleRemoveChatsFromFolder = (chatIds: number[], folderId: number) => {
+    if (!selectedAccountId) return;
+
+    const folder = folders.find(f => f.id === folderId);
+    if (folder && folder.chat_ids) {
+      const remainingChats = folder.chat_ids.filter(id => !chatIds.includes(id));
+      
+      if (remainingChats.length === 0) {
+        if (confirm(`Removing all chats from "${folder.title}" will delete the folder. Proceed?`)) {
+          deleteFolderMutation.mutate({ folderId, accountId: selectedAccountId }, {
+            onSuccess: () => {
+              setSelectedFolderId(null);
+            }
+          });
+        }
+        return;
+      }
+    }
+
+    bulkRemoveChatsMutation.mutate({
+      account_id: selectedAccountId,
+      folder_id: folderId,
+      chat_ids: chatIds
+    });
+  };
 
   // Set default account
   useEffect(() => {
@@ -231,6 +226,8 @@ export function TelegramPage() {
                 onCreateFolder={handleCreateFolder}
                 onRenameFolder={handleRenameFolder}
                 onDeleteFolder={handleDeleteFolder}
+                onDropChatsToFolder={handleDropChatsToFolder}
+                onRemoveChatsFromFolder={handleRemoveChatsFromFolder}
               />
             </div>
           </div>
@@ -246,6 +243,7 @@ export function TelegramPage() {
               isLoading={isLoadingAccounts || isLoadingDialogs}
               selectedIds={selectedChatIds}
               onSelectionChange={setSelectedChatIds}
+              onDraggingChange={setIsDragging}
             />
           </div>
         ) : (

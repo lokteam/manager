@@ -107,9 +107,12 @@ async def folder_add(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  await service.update_folder_chat(
-    client, params.folder_id, params.chat_id, remove=False
-  )
+  try:
+    await service.update_folder_chat(
+      client, params.folder_id, params.chat_id, remove=False
+    )
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
   return {"status": "success"}
 
 
@@ -120,9 +123,12 @@ async def folder_remove(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  await service.update_folder_chat(
-    client, params.folder_id, params.chat_id, remove=True
-  )
+  try:
+    await service.update_folder_chat(
+      client, params.folder_id, params.chat_id, remove=True
+    )
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
   return {"status": "success"}
 
 
@@ -133,9 +139,12 @@ async def folder_bulk_add(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  await service.update_folder_chats(
-    client, params.folder_id, params.chat_ids, remove=False
-  )
+  try:
+    await service.update_folder_chats(
+      client, params.folder_id, params.chat_ids, remove=False
+    )
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
   return {"status": "success"}
 
 
@@ -146,9 +155,12 @@ async def folder_bulk_remove(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  await service.update_folder_chats(
-    client, params.folder_id, params.chat_ids, remove=True
-  )
+  try:
+    await service.update_folder_chats(
+      client, params.folder_id, params.chat_ids, remove=True
+    )
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
   return {"status": "success"}
 
 
@@ -170,7 +182,10 @@ async def folder_rename(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
-  await service.rename_folder(client, params.folder_id, params.title)
+  try:
+    await service.rename_folder(client, params.folder_id, params.title)
+  except ValueError as e:
+    raise HTTPException(status_code=404, detail=str(e))
   return {"status": "success", "title": params.title}
 
 

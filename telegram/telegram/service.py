@@ -120,21 +120,36 @@ async def get_folders(client):
   filters_resp = await client(functions.messages.GetDialogFiltersRequest())
   results = []
   for f in filters_resp.filters:
-    chat_ids = []
-    if hasattr(f, "include_peers"):
-      for peer in f.include_peers:
-        if isinstance(peer, types.InputPeerUser):
-          chat_ids.append(peer.user_id)
-        elif isinstance(peer, types.InputPeerChat):
-          chat_ids.append(peer.chat_id)
-        elif isinstance(peer, types.InputPeerChannel):
-          chat_ids.append(int("-100" + str(peer.channel_id)))
+    chat_ids = set()
+    for attr in ["include_peers", "pinned_peers"]:
+      if hasattr(f, attr):
+        for peer in getattr(f, attr):
+          pid = get_peer_id(peer)
+          if pid:
+            chat_ids.add(pid)
 
     if isinstance(f, types.DialogFilter):
-      results.append({"id": f.id, "title": f.title.text, "chat_ids": chat_ids})
+      results.append({"id": f.id, "title": f.title.text, "chat_ids": list(chat_ids)})
     elif isinstance(f, types.DialogFilterDefault):
       results.append({"id": 0, "title": "All Chats", "chat_ids": []})
   return results
+
+
+def get_peer_id(peer: types.TypeInputPeer | types.TypePeer) -> int:
+  """Extract numeric ID from various Telegram peer types, matching Telethon's dialog.id convention."""
+  if hasattr(peer, "user_id"):
+    return getattr(peer, "user_id")
+  if hasattr(peer, "chat_id"):
+    # Legacy Chats have negative IDs in Telethon dialogs
+    cid = getattr(peer, "chat_id")
+    return -cid if cid > 0 else cid
+  if hasattr(peer, "channel_id"):
+    cid = getattr(peer, "channel_id")
+    # Channels have -100 prefix in Telethon dialogs
+    if cid > 0:
+      return int("-100" + str(cid))
+    return cid
+  return 0
 
 
 async def update_folder_chats(
@@ -149,47 +164,73 @@ async def update_folder_chats(
     raise ValueError(f"Folder with ID {folder_id} not found.")
 
   current_peers = list(target_filter.include_peers)
+  current_pinned = list(getattr(target_filter, "pinned_peers", []))
   changed = False
 
-  for chat_id in chat_ids:
+  # Pre-fetch entities to populate cache for ADDING
+  if not remove and chat_ids:
     try:
-      input_peer = await client.get_input_entity(chat_id)
+      await client.get_entity(chat_ids)
     except Exception:
-      continue
+      pass
 
+  for chat_id in chat_ids:
+    # Find in included peers
     peer_index = -1
     for i, p in enumerate(current_peers):
-      if (
-        (
-          isinstance(p, types.InputPeerUser)
-          and isinstance(input_peer, types.InputPeerUser)
-          and p.user_id == input_peer.user_id
-        )
-        or (
-          isinstance(p, types.InputPeerChat)
-          and isinstance(input_peer, types.InputPeerChat)
-          and p.chat_id == input_peer.chat_id
-        )
-        or (
-          isinstance(p, types.InputPeerChannel)
-          and isinstance(input_peer, types.InputPeerChannel)
-          and p.channel_id == input_peer.channel_id
-        )
-      ):
+      if get_peer_id(p) == chat_id:
         peer_index = i
         break
 
+    # Find in pinned peers
+    pinned_index = -1
+    for i, p in enumerate(current_pinned):
+      if get_peer_id(p) == chat_id:
+        pinned_index = i
+        break
+
     if remove:
+      peer_removed = False
       if peer_index != -1:
         current_peers.pop(peer_index)
+        peer_removed = True
+      if pinned_index != -1:
+        current_pinned.pop(pinned_index)
+        peer_removed = True
+
+      # If we are removing, we should also add to exclude_peers to handle
+      # cases where the chat is included via flags (e.g. "bots", "contacts")
+      try:
+        input_peer = await client.get_input_entity(chat_id)
+        current_excluded = list(getattr(target_filter, "exclude_peers", []))
+        if not any(get_peer_id(p) == chat_id for p in current_excluded):
+          current_excluded.append(input_peer)
+          target_filter.exclude_peers = current_excluded
+          changed = True
+      except Exception:
+        # If we can't get the entity, we can't exclude it properly,
+        # but if we already removed it from current_peers, we still want to save
+        pass
+
+      if peer_removed:
         changed = True
     else:
       if peer_index == -1:
-        current_peers.append(input_peer)
-        changed = True
+        try:
+          input_peer = await client.get_input_entity(chat_id)
+          current_peers.append(input_peer)
+          # Also remove from excluded if present
+          if hasattr(target_filter, "exclude_peers"):
+            target_filter.exclude_peers = [
+              p for p in target_filter.exclude_peers if get_peer_id(p) != chat_id
+            ]
+          changed = True
+        except Exception:
+          continue
 
   if changed:
     target_filter.include_peers = current_peers
+    target_filter.pinned_peers = current_pinned
     await client(
       functions.messages.UpdateDialogFilterRequest(id=folder_id, filter=target_filter)
     )

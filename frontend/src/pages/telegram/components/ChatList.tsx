@@ -8,14 +8,17 @@ interface ChatListProps {
   isLoading: boolean
   selectedIds: number[]
   onSelectionChange: (ids: number[]) => void
+  onDraggingChange: (isDragging: boolean) => void
 }
 
-export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: ChatListProps) {
+export function ChatList({ chats, isLoading, selectedIds, onSelectionChange, onDraggingChange }: ChatListProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null)
   const lastMousePos = useRef({ x: 0, y: 0, isModifier: false });
+  const chatPositions = useRef<Map<number, DOMRect>>(new Map());
+  const justFinishedMarquee = useRef(false);
 
   const scrollIntervalRef = useRef<number | null>(null);
 
@@ -57,6 +60,15 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
       // Store global start position
       setStartPos({ x: e.clientX, y: e.clientY })
       setIsSelecting(true)
+      justFinishedMarquee.current = false
+
+      // Cache chat positions to avoid layout thrashing during selection
+      chatPositions.current.clear()
+      const chatElements = containerRef.current?.querySelectorAll('.chat-item')
+      chatElements?.forEach((el) => {
+        const htmlEl = el as HTMLElement
+        chatPositions.current.set(Number(htmlEl.dataset.id), htmlEl.getBoundingClientRect())
+      })
 
       if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
         onSelectionChange([])
@@ -73,13 +85,9 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
 
       setSelectionBox({ x, y, w, h })
 
-      const chatElements = containerRef.current?.querySelectorAll('.chat-item')
       const newlySelectedInThisBox: number[] = []
       
-      chatElements?.forEach((el) => {
-        const htmlEl = el as HTMLElement
-        const elRect = htmlEl.getBoundingClientRect()
-
+      chatPositions.current.forEach((elRect, id) => {
         const intersects = (
           x < elRect.right &&
           x + w > elRect.left &&
@@ -88,7 +96,7 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
         )
 
         if (intersects) {
-          newlySelectedInThisBox.push(Number(htmlEl.dataset.id))
+          newlySelectedInThisBox.push(id)
         }
       })
 
@@ -131,7 +139,13 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
     }
 
     const handleMouseUp = () => {
-
+      if (selectionBox && (selectionBox.w > 5 || selectionBox.h > 5)) {
+        justFinishedMarquee.current = true;
+        // Reset flag after a short delay to allow click events to be ignored
+        setTimeout(() => {
+          justFinishedMarquee.current = false;
+        }, 100);
+      }
       setIsSelecting(false)
       setSelectionBox(null)
       setStartPos(null)
@@ -185,7 +199,7 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
   }
 
   const handleDragStart = (e: React.DragEvent, chatId: number) => {
-    (window as any).setIsDraggingGlobal?.(true)
+    onDraggingChange(true)
     let idsToDrag = selectedIds
     if (!selectedIds.includes(chatId)) {
       idsToDrag = [chatId]
@@ -203,7 +217,7 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
   }
 
   const handleDragEnd = () => {
-    (window as any).setIsDraggingGlobal?.(false)
+    onDraggingChange(false)
   }
 
   return (
@@ -241,7 +255,7 @@ export function ChatList({ chats, isLoading, selectedIds, onSelectionChange }: C
             onDragEnd={handleDragEnd}
             onClick={(e) => {
               // If we were selecting with marquee, don't trigger click
-              if (selectionBox) return
+              if (selectionBox || justFinishedMarquee.current) return
 
               if (e.shiftKey || e.metaKey || e.ctrlKey) {
                 if (isSelected) {
