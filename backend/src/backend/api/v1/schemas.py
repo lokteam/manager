@@ -209,7 +209,7 @@ class TelegramFolderRenameRequest(SchemaBase):
 class AgentReviewRequest(SchemaBase):
   prompt_id: int
   max_messages: int | None = None
-  new_only: bool = True
+  unreviewed_only: bool = True
   account_id: int | None = None
   chat_id: int | None = None
   folder_id: int | None = None

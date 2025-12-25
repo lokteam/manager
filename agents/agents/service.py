@@ -1,5 +1,5 @@
 from shared.models import session_context, VacancyReview, Prompt
-from .db_ops import get_unreviewed_messages, save_reviews
+from .db_ops import get_messages_for_review, save_reviews
 from .processor import process_messages
 
 
@@ -9,40 +9,55 @@ async def run_review_cycle(
   account_id: int | None = None,
   chat_id: int | None = None,
   folder_id: int | None = None,
+  unreviewed_only: bool = True,
 ) -> int:
   """Run one cycle of message review. Returns number of messages processed."""
+  # 1. Fetch messages and close session
   with session_context() as session:
-    messages = get_unreviewed_messages(
-      session, batch_size, account_id=account_id, chat_id=chat_id, folder_id=folder_id
+    messages = get_messages_for_review(
+      session,
+      batch_size,
+      account_id=account_id,
+      chat_id=chat_id,
+      folder_id=folder_id,
+      unreviewed_only=unreviewed_only,
     )
     if not messages:
       return 0
+    # Create a detached-like copy of needed data to avoid session issues
+    # but since we are just reading, we can just keep them in memory.
+    # We need to preserve the order for index mapping.
+    message_data = [(m.id, m.dialog_id, m.account_id) for m in messages]
 
-    batch_output = await process_messages(messages, system_prompt)
+  # 2. Process with AI (No DB connection held)
+  batch_output = await process_messages(messages, system_prompt)
 
-    reviews_to_save = []
-    for review_data in batch_output.reviews:
-      # Find original message to get composite key parts
-      orig_msg = next((m for m in messages if m.id == review_data.message_id), None)
-      if not orig_msg:
-        continue
+  # 3. Save results in a new session
+  reviews_to_save = []
+  for review_data in batch_output.reviews:
+    if review_data.index < 0 or review_data.index >= len(message_data):
+      continue
 
-      review = VacancyReview(
-        message_id=review_data.message_id,
-        dialog_id=orig_msg.dialog_id,
-        account_id=orig_msg.account_id,
-        decision=review_data.decision,
-        contacts=review_data.contacts,
-        vacancy_position=review_data.vacancy_position,
-        vacancy_description=review_data.vacancy_description,
-        vacancy_requirements=review_data.vacancy_requirements,
-        salary_fork_from=review_data.salary_fork_from,
-        salary_fork_to=review_data.salary_fork_to,
-      )
-      reviews_to_save.append(review)
+    msg_id, diag_id, acc_id = message_data[review_data.index]
 
+    review = VacancyReview(
+      message_id=msg_id,
+      dialog_id=diag_id,
+      account_id=acc_id,
+      decision=review_data.decision,
+      contacts=review_data.contacts,
+      vacancy_position=review_data.vacancy_position,
+      vacancy_description=review_data.vacancy_description,
+      vacancy_requirements=review_data.vacancy_requirements,
+      salary_fork_from=review_data.salary_fork_from,
+      salary_fork_to=review_data.salary_fork_to,
+    )
+    reviews_to_save.append(review)
+
+  with session_context() as session:
     save_reviews(session, reviews_to_save)
-    return len(messages)
+
+  return len(messages)
 
 
 async def review_messages(
@@ -51,6 +66,7 @@ async def review_messages(
   account_id: int | None = None,
   chat_id: int | None = None,
   folder_id: int | None = None,
+  unreviewed_only: bool = True,
 ):
   # Fetch prompt content
   with session_context() as session:
@@ -74,6 +90,7 @@ async def review_messages(
       account_id=account_id,
       chat_id=chat_id,
       folder_id=folder_id,
+      unreviewed_only=unreviewed_only,
     )
     if num_processed == 0:
       break

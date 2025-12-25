@@ -157,7 +157,6 @@ export function AgentPage() {
       runReviewMutation.mutate({ 
         prompt_id: Number(selectedPromptId),
         max_messages: maxMessages,
-        new_only: newOnly,
         account_id: selectedAccountId || undefined,
         folder_id: Number(selectedFolderId) || undefined
       })
@@ -179,7 +178,6 @@ export function AgentPage() {
       runReviewMutation.mutate({ 
         prompt_id: Number(selectedPromptId),
         max_messages: maxMessages,
-        new_only: newOnly,
         account_id: selectedAccountId || undefined,
         chat_id: dialogId
       })

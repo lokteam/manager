@@ -6,7 +6,7 @@ from shared.models import Message, VacancyReviewDecision, ContactDTO
 class MessageReviewOutput(BaseModel):
   """Structured output for a single message review."""
 
-  message_id: int
+  index: int = Field(description="Index of the message from the input list")
   decision: VacancyReviewDecision
   contacts: list[ContactDTO] = Field(
     default_factory=list, description="List of extracted contacts"
@@ -43,8 +43,8 @@ async def process_messages(
     return BatchReviewOutput(reviews=[])
 
   prompt = "Review the following messages:\n\n"
-  for msg in messages:
-    prompt += f"ID: {msg.id}\nText: {msg.text}\n---\n"
+  for i, msg in enumerate(messages):
+    prompt += f"INDEX: {i}\nText: {msg.text}\n---\n"
 
   agent = get_agent(system_prompt)
   result = await agent.run(prompt)

@@ -255,7 +255,7 @@ export interface TelegramFolder {
 export interface AgentReviewRequest {
   prompt_id: number
   max_messages?: number
-  new_only?: boolean
+  unreviewed_only?: boolean
   account_id?: number
   chat_id?: number
   folder_id?: number
