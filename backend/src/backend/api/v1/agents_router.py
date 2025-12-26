@@ -29,6 +29,7 @@ async def review(
   try:
     processed_total = await service.review_messages(
       prompt_id=params.prompt_id,
+      user_id=user.id,
       max_messages=params.max_messages,
       account_id=params.account_id,
       chat_id=params.chat_id,

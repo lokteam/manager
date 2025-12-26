@@ -73,7 +73,7 @@ async def create_prompt(
   session: AsyncSession = Depends(get_async_session),
 ):
   # Get the next available ID
-  id_statement = select(func.max(Prompt.id)).where(Prompt.user_id == user.id)
+  id_statement = select(func.max(Prompt.id))
   id_result = await session.execute(id_statement)
   max_id = id_result.scalar() or 0
   new_id = max_id + 1

@@ -108,6 +108,7 @@ async def run_review_cycle(
 
 async def review_messages(
   prompt_id: int,
+  user_id: int,
   max_messages: int | None = None,
   account_id: int | None = None,
   chat_id: int | None = None,
@@ -119,7 +120,7 @@ async def review_messages(
     # Get the latest version of the prompt
     statement = (
       select(Prompt)
-      .where(Prompt.id == prompt_id)
+      .where(Prompt.id == prompt_id, Prompt.user_id == user_id)
       .order_by(Prompt.version.desc())
       .limit(1)
     )
