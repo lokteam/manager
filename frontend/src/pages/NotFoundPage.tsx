@@ -10,7 +10,7 @@ export function NotFoundPage() {
         title="Page not found"
         description="The page you're looking for doesn't exist or has been moved."
         action={
-          <Link to="/kanban">
+          <Link to="/telegram">
             <Button>Go to Dashboard</Button>
           </Link>
         }

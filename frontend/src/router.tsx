@@ -4,7 +4,7 @@ import { LoginPage, RegisterPage } from '@/pages/auth'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
 import { AgentPage } from '@/pages/agent/AgentPage'
-import { KanbanPage } from '@/pages/kanban/KanbanPage'
+import { VacanciesPage } from '@/pages/vacancies/VacanciesPage'
 import { TelegramPage } from '@/pages/telegram/TelegramPage'
 import { PromptsPage } from '@/pages/prompts/PromptsPage'
 
@@ -28,7 +28,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <Navigate to="/telegram" replace /> },
       { path: '/telegram', element: <TelegramPage /> },
-      { path: '/kanban', element: <KanbanPage /> },
+      { path: '/vacancies', element: <VacanciesPage /> },
       { path: '/agent', element: <AgentPage /> },
       { path: '/prompts', element: <PromptsPage /> },
     ],

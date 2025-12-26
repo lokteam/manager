@@ -25,10 +25,19 @@ export enum VacancyProgressStatus {
   OFFER = 'OFFER',
 }
 
+export enum Seniority {
+  TRAINEE = 'TRAINEE',
+  JUNIOR = 'JUNIOR',
+  MIDDLE = 'MIDDLE',
+  SENIOR = 'SENIOR',
+  LEAD = 'LEAD',
+}
+
 export enum ContactType {
   PHONE = 'PHONE',
   EMAIL = 'EMAIL',
   TELEGRAM_USERNAME = 'TELEGRAM_USERNAME',
+  TELEGRAM_ID = 'TELEGRAM_ID',
   EXTERNAL_PLATFORM = 'EXTERNAL_PLATFORM',
   OTHER = 'OTHER',
 }
@@ -53,6 +62,7 @@ export interface AuthResponse {
 // Telegram Account
 export interface TelegramAccount {
   id: number
+  user_id: number
   api_id: number
   api_hash: string
   phone: string
@@ -79,6 +89,7 @@ export interface TelegramAccountUpdate {
 // Folder
 export interface Folder {
   id: number
+  user_id: number
   name: string
 }
 
@@ -93,6 +104,7 @@ export interface FolderUpdate {
 // Dialog
 export interface Dialog {
   id: number
+  telegram_id: number
   account_id: number
   entity_type: DialogType
   username?: string
@@ -100,7 +112,7 @@ export interface Dialog {
 }
 
 export interface DialogCreate {
-  id: number
+  telegram_id: number
   account_id: number
   entity_type: DialogType
   username?: string
@@ -115,8 +127,8 @@ export interface DialogUpdate {
 // Message
 export interface Message {
   id: number
+  telegram_id: number
   dialog_id: number
-  account_id: number
   from_id?: number
   from_type?: PeerType
   text?: string
@@ -124,9 +136,8 @@ export interface Message {
 }
 
 export interface MessageCreate {
-  id: number
+  telegram_id: number
   dialog_id: number
-  account_id: number
   from_id?: number
   from_type?: PeerType
   text?: string
@@ -141,36 +152,40 @@ export interface MessageUpdate {
 export interface VacancyReview {
   id: number
   message_id: number
-  dialog_id: number
-  account_id: number
   decision: VacancyReviewDecision
+  seniority?: Seniority
   contacts: ContactDTO[]
   vacancy_position: string
   vacancy_description: string
-  vacancy_requirements?: string
+  vacancy_requirements?: string[]
   salary_fork_from?: number
   salary_fork_to?: number
+  dialog_id: number
+  account_id: number
+  telegram_dialog_id: number
+  telegram_message_id: number
+  dialog_username?: string
 }
 
 export interface VacancyReviewCreate {
   message_id: number
-  dialog_id: number
-  account_id: number
   decision: VacancyReviewDecision
+  seniority?: Seniority
   contacts: ContactDTO[]
   vacancy_position: string
   vacancy_description: string
-  vacancy_requirements?: string
+  vacancy_requirements?: string[]
   salary_fork_from?: number
   salary_fork_to?: number
 }
 
 export interface VacancyReviewUpdate {
   decision?: VacancyReviewDecision
+  seniority?: Seniority
   contacts?: ContactDTO[]
   vacancy_position?: string
   vacancy_description?: string
-  vacancy_requirements?: string
+  vacancy_requirements?: string[]
   salary_fork_from?: number
   salary_fork_to?: number
 }

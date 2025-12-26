@@ -42,10 +42,14 @@ export function TelegramPage() {
 
   const handleDropChatsToFolder = (chatIds: number[], folderId: number) => {
     if (selectedAccountId) {
+      const telegramIds = chatIds
+        .map(id => allDialogs.find(d => d.id === id)?.telegram_id)
+        .filter((id): id is number => id !== undefined);
+
       bulkAddChatsMutation.mutate({
         account_id: selectedAccountId,
         folder_id: folderId,
-        chat_ids: chatIds
+        chat_ids: telegramIds
       }, {
         onSuccess: () => {
           setSelectedFolderId(folderId);
@@ -57,9 +61,13 @@ export function TelegramPage() {
   const handleRemoveChatsFromFolder = (chatIds: number[], folderId: number) => {
     if (!selectedAccountId) return;
 
+    const telegramIds = chatIds
+      .map(id => allDialogs.find(d => d.id === id)?.telegram_id)
+      .filter((id): id is number => id !== undefined);
+
     const folder = folders.find(f => f.id === folderId);
     if (folder && folder.chat_ids) {
-      const remainingChats = folder.chat_ids.filter(id => !chatIds.includes(id));
+      const remainingChats = folder.chat_ids.filter(id => !telegramIds.includes(id));
       
       if (remainingChats.length === 0) {
         if (confirm(`Removing all chats from "${folder.title}" will delete the folder. Proceed?`)) {
@@ -76,7 +84,7 @@ export function TelegramPage() {
     bulkRemoveChatsMutation.mutate({
       account_id: selectedAccountId,
       folder_id: folderId,
-      chat_ids: chatIds
+      chat_ids: telegramIds
     });
   };
 
@@ -108,7 +116,7 @@ export function TelegramPage() {
       const folder = folders.find((f) => f.id === selectedFolderId)
       if (folder && folder.chat_ids) {
         const chatIds = new Set(folder.chat_ids)
-        dialogs = dialogs.filter((d) => chatIds.has(d.id))
+        dialogs = dialogs.filter((d) => chatIds.has(d.telegram_id))
       }
     }
 

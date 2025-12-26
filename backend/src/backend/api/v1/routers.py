@@ -13,6 +13,8 @@ from . import schemas
 from .telegram_router import router as telegram_router
 from .agents_router import router as agents_router
 from .prompts_router import router as prompts_router
+from .reviews_router import router as reviews_router
+from .progress_router import router as progress_router
 from typing import Annotated
 import asyncio
 from telegram import client as tg_client
@@ -24,6 +26,8 @@ api_router = APIRouter()
 api_router.include_router(telegram_router)
 api_router.include_router(agents_router)
 api_router.include_router(prompts_router)
+api_router.include_router(reviews_router)
+api_router.include_router(progress_router)
 
 
 # Helper to get user's account IDs for hierarchical filtering

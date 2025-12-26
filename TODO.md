@@ -1,25 +1,6 @@
 # Project TODO
 
-## Completed
-
-- [x] Telegram: Support date range `date_from` and `date_to` for listing messages.
-- [x] Telegram: Destructure code (remove nested `async def f_` inside typer commands).
-- [x] Telegram: Implement dry run in CLI (output to terminal, no database interaction).
-- [x] Telegram: Fix callback execution on `--help` (move init to command execution).
-- [x] Telegram: Save sessions to `telegram/telegram/sessions`.
-
-## Pending
-
-- [x] Check telegram changes manually
-- [x] Add Alembic to `shared` module for database migrations
-- [x] Add telegram dialogs grouping by folder id (mapping folder names)
-- [ ] Backend Module (FastAPI)
-  - [ ] Make plan for backend
-  - [ ] Implement JWT-based Auth
-  - [ ] Implement SSO
-  - [ ] Create CRUD endpoints for data
-  - [ ] Implement "Bridge" to trigger CLI commands (telegram/agents)
-- [ ] Frontend Module (React)
-  - [ ] Initialize React app (Vite + TS + Tailwind)
-  - [ ] Prepare for Cursor (create `.cursorrules`, update `AGENTS.md`)
-  - [ ] Implement Dashboard and actions UI
+[ ] Fix "In progress Done" after agent run. When agent runs it has progress bar with 3 steps. On 3rd, final step, In progress tag does not go away and we have 2 tags in the UI simultaneously
+[ ] SSO only login. Remove ONLY FROM FRONTEND ability to log in by email and password. Only with google SSO
+[ ] Folders are loading on telegram page open in frontend, but dialogs in folders don't.
+[ ] In vacancy review frontend ui add interactive "Original message" button that has link to original telegram message ( link looks like this https://t.me/{dialog_id}/{message_id} )

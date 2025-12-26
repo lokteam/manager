@@ -7,7 +7,7 @@ from typing import Generator, AsyncGenerator
 
 from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, Column
-from sqlalchemy import JSON, ForeignKeyConstraint
+from sqlalchemy import JSON, event, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 
@@ -27,15 +27,31 @@ def pydantic_encoder(obj):
 
 engine = create_engine(
   DB_URL,
-  connect_args={"check_same_thread": False},
+  connect_args={"check_same_thread": False, "timeout": 30},
   json_serializer=lambda obj: json.dumps(obj, default=pydantic_encoder),
 )
 
 async_engine = create_async_engine(
   ASYNC_DB_URL,
-  connect_args={"check_same_thread": False},
+  connect_args={"check_same_thread": False, "timeout": 30},
   json_serializer=lambda obj: json.dumps(obj, default=pydantic_encoder),
 )
+
+
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+  cursor = dbapi_connection.cursor()
+  cursor.execute("PRAGMA journal_mode=WAL")
+  cursor.execute("PRAGMA synchronous=NORMAL")
+  cursor.close()
+
+
+@event.listens_for(async_engine.sync_engine, "connect")
+def set_async_sqlite_pragma(dbapi_connection, connection_record):
+  cursor = dbapi_connection.cursor()
+  cursor.execute("PRAGMA journal_mode=WAL")
+  cursor.execute("PRAGMA synchronous=NORMAL")
+  cursor.close()
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -113,16 +129,8 @@ class TelegramAccount(SQLModel, table=True):
 
 
 class DialogFolderLink(SQLModel, table=True):
-  dialog_id: int = Field(primary_key=True)
-  account_id: int = Field(primary_key=True)
+  dialog_id: int = Field(foreign_key="dialog.id", primary_key=True)
   folder_id: int = Field(foreign_key="folder.id", primary_key=True)
-
-  __table_args__ = (
-    ForeignKeyConstraint(
-      ["dialog_id", "account_id"],
-      ["dialog.id", "dialog.account_id"],
-    ),
-  )
 
 
 class Folder(SQLModel, table=True):
@@ -137,8 +145,9 @@ class Folder(SQLModel, table=True):
 
 
 class Dialog(SQLModel, table=True):
-  id: int = Field(primary_key=True)
-  account_id: int = Field(foreign_key="telegramaccount.id", primary_key=True)
+  id: int | None = Field(default=None, primary_key=True)
+  telegram_id: int = Field(index=True)
+  account_id: int = Field(foreign_key="telegramaccount.id")
   entity_type: DialogType
   username: str | None = Field(default=None, index=True)
   name: str | None = Field(default=None, index=True)
@@ -147,13 +156,9 @@ class Dialog(SQLModel, table=True):
   folders: list[Folder] = Relationship(
     back_populates="dialogs", link_model=DialogFolderLink
   )
-  messages: list["Message"] = Relationship(
-    back_populates="dialog",
-    sa_relationship_kwargs={
-      "primaryjoin": "and_(Dialog.id==Message.dialog_id, Dialog.account_id==Message.account_id)",
-      "viewonly": True,
-    },
-  )
+  messages: list["Message"] = Relationship(back_populates="dialog")
+
+  __table_args__ = (UniqueConstraint("telegram_id", "account_id"),)
 
 
 class PeerType(str, Enum):
@@ -163,40 +168,28 @@ class PeerType(str, Enum):
 
 
 class Message(SQLModel, table=True):
-  id: int = Field(primary_key=True)
-  dialog_id: int = Field(primary_key=True)
-  account_id: int = Field(primary_key=True)
+  id: int | None = Field(default=None, primary_key=True)
+  telegram_id: int = Field(index=True)
+  dialog_id: int = Field(foreign_key="dialog.id")
   from_id: int | None = None
   from_type: PeerType | None = None
   text: str | None = None
   date: datetime | None = None
 
-  __table_args__ = (
-    ForeignKeyConstraint(
-      ["dialog_id", "account_id"],
-      ["dialog.id", "dialog.account_id"],
-    ),
-  )
-
-  dialog: Dialog = Relationship(
-    back_populates="messages",
-    sa_relationship_kwargs={
-      "primaryjoin": "and_(Message.dialog_id==Dialog.id, Message.account_id==Dialog.account_id)",
-    },
-  )
+  dialog: Dialog = Relationship(back_populates="messages")
   review: "VacancyReview" = Relationship(
     back_populates="message",
-    sa_relationship_kwargs={
-      "primaryjoin": "and_(Message.id==VacancyReview.message_id, Message.dialog_id==VacancyReview.dialog_id, Message.account_id==VacancyReview.account_id)",
-      "uselist": False,
-    },
+    sa_relationship_kwargs={"uselist": False},
   )
+
+  __table_args__ = (UniqueConstraint("telegram_id", "dialog_id"),)
 
 
 class ContactType(EnumCat):
   PHONE = "PHONE"
   EMAIL = "EMAIL"
   TELEGRAM_USERNAME = "TELEGRAM_USERNAME"
+  TELEGRAM_ID = "TELEGRAM_ID"
   EXTERNAL_PLATFORM = "EXTERNAL_PLATFORM"
   OTHER = "OTHER"
 
@@ -206,6 +199,14 @@ class VacancyReviewDecision(EnumCat):
   APPROVE = "APPROVE"
 
 
+class Seniority(EnumCat):
+  TRAINEE = "TRAINEE"
+  JUNIOR = "JUNIOR"
+  MIDDLE = "MIDDLE"
+  SENIOR = "SENIOR"
+  LEAD = "LEAD"
+
+
 class ContactDTO(BaseModel):
   type: ContactType = Field(description="Type of contact")
   value: str = Field(description="Contact value (email, phone, etc.)")
@@ -213,31 +214,21 @@ class ContactDTO(BaseModel):
 
 class VacancyReview(SQLModel, table=True):
   id: int | None = Field(primary_key=True, default=None)
-  message_id: int = Field()
-  dialog_id: int = Field()
-  account_id: int = Field()
+  message_id: int = Field(foreign_key="message.id", unique=True)
   decision: VacancyReviewDecision
   contacts: list[ContactDTO] = Field(sa_column=Column(JSON), default_factory=list)
+  seniority: Seniority | None = Field(default=None, index=True)
   vacancy_position: str
   vacancy_description: str
-  vacancy_requirements: str | None = None
+  vacancy_requirements: list[str] | None = Field(sa_column=Column(JSON), default=None)
   salary_fork_from: int | None = None
   salary_fork_to: int | None = None
 
-  __table_args__ = (
-    ForeignKeyConstraint(
-      ["message_id", "dialog_id", "account_id"],
-      ["message.id", "message.dialog_id", "message.account_id"],
-    ),
-  )
-
-  message: Message = Relationship(
+  message: Message = Relationship(back_populates="review")
+  vacancy: "VacancyProgress" = Relationship(
     back_populates="review",
-    sa_relationship_kwargs={
-      "primaryjoin": "and_(VacancyReview.message_id==Message.id, VacancyReview.dialog_id==Message.dialog_id, VacancyReview.account_id==Message.account_id)",
-    },
+    sa_relationship_kwargs={"cascade": "all, delete-orphan"},
   )
-  vacancy: "VacancyProgress" = Relationship(back_populates="review")
 
 
 class VacancyProgressStatus(EnumCat):

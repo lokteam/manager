@@ -1,5 +1,13 @@
+from sqlalchemy.orm import joinedload
 from sqlmodel import Session, select
-from shared.models import Message, VacancyReview, VacancyProgress, VacancyReviewDecision
+from shared.models import (
+  Message,
+  VacancyReview,
+  VacancyProgress,
+  VacancyReviewDecision,
+  Dialog,
+  TelegramAccount,
+)
 
 
 def get_messages_for_review(
@@ -13,22 +21,27 @@ def get_messages_for_review(
   """Retrieve messages for review, with optional filtering."""
   from shared.models import DialogFolderLink
 
-  statement = select(Message)
+  statement = select(Message).options(
+    joinedload(Message.dialog).joinedload(Dialog.account)
+  )
   if unreviewed_only:
     statement = statement.where(Message.review == None)  # noqa: E711
 
+  if account_id is not None or folder_id is not None or chat_id is not None:
+    statement = statement.join(Dialog, Message.dialog_id == Dialog.id)
+
   if account_id is not None:
-    statement = statement.where(Message.account_id == account_id)
+    statement = statement.where(Dialog.account_id == account_id)
 
   if chat_id is not None:
-    statement = statement.where(Message.dialog_id == chat_id)
+    # Here chat_id is the internal surrogate ID of the dialog
+    statement = statement.where(Dialog.id == chat_id)
 
   if folder_id is not None:
     # Join with DialogFolderLink to filter by folder
     statement = statement.join(
       DialogFolderLink,
-      (Message.dialog_id == DialogFolderLink.dialog_id)
-      & (Message.account_id == DialogFolderLink.account_id),
+      Dialog.id == DialogFolderLink.dialog_id,
     ).where(DialogFolderLink.folder_id == folder_id)
 
   statement = statement.limit(limit)
@@ -40,9 +53,7 @@ def save_reviews(session: Session, reviews: list[VacancyReview]) -> None:
   for review in reviews:
     # Check if review already exists for this message
     existing_statement = select(VacancyReview).where(
-      VacancyReview.message_id == review.message_id,
-      VacancyReview.dialog_id == review.dialog_id,
-      VacancyReview.account_id == review.account_id,
+      VacancyReview.message_id == review.message_id
     )
     existing_review = session.exec(existing_statement).first()
 

@@ -10,7 +10,7 @@ export function ForbiddenPage() {
         title="Access Forbidden"
         description="You don't have permission to access this resource."
         action={
-          <Link to="/kanban">
+          <Link to="/telegram">
             <Button>Go to Dashboard</Button>
           </Link>
         }

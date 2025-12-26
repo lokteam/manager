@@ -78,9 +78,22 @@ async def fetch_messages(
   session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
   client = await get_account_client(params.account_id, user.id, session)
+
+  # Resolve internal chat_id to telegram_id
+  from shared.models import Dialog
+
+  result = await session.execute(
+    select(Dialog).where(
+      Dialog.id == params.chat_id, Dialog.account_id == params.account_id
+    )
+  )
+  db_dialog = result.scalar_one_or_none()
+  if not db_dialog:
+    raise HTTPException(status_code=404, detail="Dialog not found")
+
   messages = await service.get_messages(
     client,
-    params.chat_id,
+    db_dialog.telegram_id,
     params.new_only,
     params.max_messages,
     params.date_from,

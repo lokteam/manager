@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from telethon import functions, types
+from sqlmodel import select
 from shared import models as db
 from .converters import extract_dialog_type, extract_peer_type, extract_peer_id
 
@@ -14,8 +15,15 @@ async def get_messages(
   dry_run: bool = False,
 ):
   if isinstance(dialog, int):
-    dialogs = await client.get_dialogs(limit=None)
-    dialog = next(d for d in dialogs if d.id == dialog)
+    try:
+      dialog = await client.get_entity(dialog)
+    except Exception:
+      # Fallback to get_dialogs if get_entity fails
+      dialogs = await client.get_dialogs(limit=None)
+      try:
+        dialog = next(d for d in dialogs if d.id == dialog)
+      except StopIteration:
+        raise ValueError(f"Dialog with ID {dialog} not found")
 
   kwargs = {
     "entity": dialog,
@@ -51,17 +59,52 @@ async def get_messages(
   if not dry_run and messages:
     account_id = getattr(client, "account_id", None)
     with db.session_context() as session:
-      for message in messages:
-        message_model = db.Message(
-          id=message.id,
-          dialog_id=dialog.id,
+      # Find internal dialog ID first
+      dialog_stmt = select(db.Dialog).where(
+        db.Dialog.telegram_id == dialog.id, db.Dialog.account_id == account_id
+      )
+      internal_dialog = session.exec(dialog_stmt).first()
+      if not internal_dialog:
+        # If dialog not synced yet, sync it
+        internal_dialog = db.Dialog(
+          telegram_id=dialog.id,
           account_id=account_id,
-          from_id=extract_peer_id(message),
-          from_type=extract_peer_type(message),
-          text=message.message,
-          date=message.date,
+          name=dialog.name,
+          username=dialog.entity.username
+          if hasattr(dialog.entity, "username")
+          else None,
+          entity_type=extract_dialog_type(dialog),
         )
-        session.merge(message_model)
+        session.add(internal_dialog)
+        session.commit()
+        session.refresh(internal_dialog)
+
+      for message in messages:
+        from_id = extract_peer_id(message)
+
+        # Upsert Message
+        msg_stmt = select(db.Message).where(
+          db.Message.telegram_id == message.id,
+          db.Message.dialog_id == internal_dialog.id,
+        )
+        existing_msg = session.exec(msg_stmt).first()
+
+        if existing_msg:
+          existing_msg.text = message.message
+          existing_msg.date = message.date
+          existing_msg.from_id = from_id
+          existing_msg.from_type = extract_peer_type(message)
+          session.add(existing_msg)
+        else:
+          message_model = db.Message(
+            telegram_id=message.id,
+            dialog_id=internal_dialog.id,
+            from_id=from_id,
+            from_type=extract_peer_type(message),
+            text=message.message,
+            date=message.date,
+          )
+          session.add(message_model)
       session.commit()
     await messages[0].mark_read()
 
@@ -84,12 +127,7 @@ async def sync_dialogs(client, folder_id: int | None = None, dry_run: bool = Fal
     included_peer_ids = []
     if hasattr(target_filter, "include_peers"):
       for peer in target_filter.include_peers:
-        if isinstance(peer, types.InputPeerUser):
-          included_peer_ids.append(peer.user_id)
-        elif isinstance(peer, types.InputPeerChat):
-          included_peer_ids.append(peer.chat_id)
-        elif isinstance(peer, types.InputPeerChannel):
-          included_peer_ids.append(int("-100" + str(peer.channel_id)))
+        included_peer_ids.append(get_peer_id(peer))
 
     dialogs = [d for d in dialogs if d.id in included_peer_ids]
 
@@ -100,16 +138,29 @@ async def sync_dialogs(client, folder_id: int | None = None, dry_run: bool = Fal
 
     with db.session_context() as session:
       for dialog in dialogs:
-        dialog_model = db.Dialog(
-          id=dialog.id,
-          account_id=account_id,
-          name=dialog.name,
-          username=dialog.entity.username
-          if hasattr(dialog.entity, "username")
-          else None,
-          entity_type=extract_dialog_type(dialog),
+        stmt = select(db.Dialog).where(
+          db.Dialog.telegram_id == dialog.id, db.Dialog.account_id == account_id
         )
-        session.merge(dialog_model)
+        existing_dialog = session.exec(stmt).first()
+
+        if existing_dialog:
+          existing_dialog.name = dialog.name
+          existing_dialog.username = (
+            dialog.entity.username if hasattr(dialog.entity, "username") else None
+          )
+          existing_dialog.entity_type = extract_dialog_type(dialog)
+          session.add(existing_dialog)
+        else:
+          dialog_model = db.Dialog(
+            telegram_id=dialog.id,
+            account_id=account_id,
+            name=dialog.name,
+            username=dialog.entity.username
+            if hasattr(dialog.entity, "username")
+            else None,
+            entity_type=extract_dialog_type(dialog),
+          )
+          session.add(dialog_model)
       session.commit()
 
   return dialogs
@@ -286,3 +337,14 @@ async def rename_folder(client, folder_id: int, new_title: str):
     functions.messages.UpdateDialogFilterRequest(id=folder_id, filter=target_filter)
   )
   return True
+
+
+async def resolve_username(client, user_id: int) -> str | None:
+  """Resolve a Telegram user ID to a username if available."""
+  try:
+    entity = await client.get_entity(user_id)
+    if hasattr(entity, "username") and entity.username:
+      return entity.username
+  except Exception:
+    pass
+  return None

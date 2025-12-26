@@ -33,10 +33,10 @@ ENV/
 *.swo
 
 # Project specific
-.env
+*.env*
 *.session
 *.session-journal
-*.db
+*.db*
 .ruff_cache/
 
 

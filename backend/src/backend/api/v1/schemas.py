@@ -3,6 +3,7 @@ from shared.models import (
   DialogType,
   PeerType,
   ContactDTO,
+  Seniority,
   VacancyReviewDecision,
   VacancyProgressStatus,
 )
@@ -74,7 +75,7 @@ class FolderRead(FolderCreate):
 
 # Dialog
 class DialogCreate(SchemaBase):
-  id: int
+  telegram_id: int
   account_id: int
   entity_type: DialogType
   username: str | None = None
@@ -87,14 +88,13 @@ class DialogUpdate(SchemaBase):
 
 
 class DialogRead(DialogCreate):
-  pass
+  id: int
 
 
 # Message
 class MessageCreate(SchemaBase):
-  id: int
+  telegram_id: int
   dialog_id: int
-  account_id: int
   from_id: int | None = None
   from_type: PeerType | None = None
   text: str | None = None
@@ -106,35 +106,40 @@ class MessageUpdate(SchemaBase):
 
 
 class MessageRead(MessageCreate):
-  pass
+  id: int
 
 
 # VacancyReview
 class VacancyReviewCreate(SchemaBase):
   message_id: int
-  dialog_id: int
-  account_id: int
   decision: VacancyReviewDecision
+  seniority: Seniority | None = None
   contacts: list[ContactDTO] = []
   vacancy_position: str
   vacancy_description: str
-  vacancy_requirements: str | None = None
+  vacancy_requirements: list[str] | None = None
   salary_fork_from: int | None = None
   salary_fork_to: int | None = None
 
 
 class VacancyReviewUpdate(SchemaBase):
   decision: VacancyReviewDecision | None = None
+  seniority: Seniority | None = None
   contacts: list[ContactDTO] | None = None
   vacancy_position: str | None = None
   vacancy_description: str | None = None
-  vacancy_requirements: str | None = None
+  vacancy_requirements: list[str] | None = None
   salary_fork_from: int | None = None
   salary_fork_to: int | None = None
 
 
 class VacancyReviewRead(VacancyReviewCreate):
   id: int
+  dialog_id: int
+  account_id: int
+  telegram_dialog_id: int
+  telegram_message_id: int
+  dialog_username: str | None = None
 
 
 # VacancyProgress

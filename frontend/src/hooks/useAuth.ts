@@ -34,7 +34,7 @@ export function useLogin() {
       useAuthStore.getState().setUser(user)
       queryClient.setQueryData(['me'], user)
       success('Welcome back!')
-      navigate('/kanban')
+      navigate('/telegram')
     },
     onError: (err) => {
       if (err instanceof HttpError) {

@@ -194,7 +194,7 @@ export function AgentPage() {
   const runReviewMutation = useMutation({
     mutationFn: agentsApi.runAgentReview,
     onSuccess: () => {
-      setAgentState({ step: 'complete', message: 'Review complete! New vacancies added to Kanban.' })
+      setAgentState({ step: 'complete', message: 'Review complete! New vacancies added to your list.' })
       queryClient.invalidateQueries({ queryKey: ['reviews'] })
       queryClient.invalidateQueries({ queryKey: ['progress'] })
       success('Agent review completed successfully!')
@@ -365,7 +365,7 @@ export function AgentPage() {
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)] text-white font-black">4</span>
                   <div className="space-y-1">
                     <p className="font-bold text-[var(--color-text-primary)]">Results</p>
-                    <p className="text-sm">Extracted vacancies are automatically added to your Kanban board with all relevant details.</p>
+                    <p className="text-sm">Extracted vacancies are automatically added to your vacancies list with all relevant details.</p>
                   </div>
                 </li>
               </ol>
@@ -376,7 +376,7 @@ export function AgentPage() {
 
         {isRunning || isFinished ? (
           <div className="flex-1 flex items-center justify-center p-8 bg-[var(--color-bg-primary)] overflow-hidden">
-            <AgentStatusDisplay state={agentState} onReset={() => setAgentState({ step: 'idle', message: '' })} onGoToKanban={() => navigate('/kanban')} />
+            <AgentStatusDisplay state={agentState} onReset={() => setAgentState({ step: 'idle', message: '' })} onGoToVacancies={() => navigate('/vacancies')} />
           </div>
         ) : (
           <div className="flex-1 overflow-hidden p-8 lg:p-12 pt-0 lg:pt-0">
@@ -748,10 +748,10 @@ function SearchableSelect({ label, value, options, onChange, placeholder, disabl
 interface AgentStatusDisplayProps {
   state: AgentState
   onReset: () => void
-  onGoToKanban: () => void
+  onGoToVacancies: () => void
 }
 
-function AgentStatusDisplay({ state, onReset, onGoToKanban }: AgentStatusDisplayProps) {
+function AgentStatusDisplay({ state, onReset, onGoToVacancies }: AgentStatusDisplayProps) {
   const steps = [
     { key: 'fetching', label: 'Message Sync', icon: Download },
     { key: 'reviewing', label: 'AI Processing', icon: Bot },
@@ -801,7 +801,7 @@ function AgentStatusDisplay({ state, onReset, onGoToKanban }: AgentStatusDisplay
                 <p className={cn("text-[10px] font-black uppercase tracking-[0.1em] mb-1", 
                   isActive || isComplete ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
                 )}>{step.label}</p>
-                {isActive && <Badge variant="secondary" className="bg-[var(--color-accent-muted)] text-[var(--color-accent)] text-[8px] border-0 px-2 uppercase">In Progress</Badge>}
+                {isActive && !isComplete && <Badge variant="secondary" className="bg-[var(--color-accent-muted)] text-[var(--color-accent)] text-[8px] border-0 px-2 uppercase">In Progress</Badge>}
                 {isComplete && <Badge variant="secondary" className="bg-[var(--color-success)]/10 text-[var(--color-success)] text-[8px] border-0 px-2 uppercase">Done</Badge>}
               </div>
             </div>
@@ -817,7 +817,7 @@ function AgentStatusDisplay({ state, onReset, onGoToKanban }: AgentStatusDisplay
         
         {state.step === 'complete' && (
            <div className="pt-8 space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
-             <Button onClick={onGoToKanban} className="w-full py-8 rounded-[2rem] text-lg font-black shadow-2xl shadow-[var(--color-accent)]/30">
+             <Button onClick={onGoToVacancies} className="w-full py-8 rounded-[2rem] text-lg font-black shadow-2xl shadow-[var(--color-accent)]/30">
                Review Extracted Vacancies
              </Button>
              <button onClick={onReset} className="text-xs font-black uppercase tracking-widest text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-all flex items-center justify-center gap-2 mx-auto py-2">

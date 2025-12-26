@@ -1,6 +1,17 @@
-from shared.models import session_context, VacancyReview, Prompt
+from shared.models import (
+  session_context,
+  VacancyReview,
+  Prompt,
+  Message,
+  Dialog,
+  TelegramAccount,
+  ContactType,
+)
 from .db_ops import get_messages_for_review, save_reviews
 from .processor import process_messages
+from telegram.client import get_client
+from telegram.service import resolve_username
+from sqlmodel import select
 
 
 async def run_review_cycle(
@@ -12,7 +23,7 @@ async def run_review_cycle(
   unreviewed_only: bool = True,
 ) -> int:
   """Run one cycle of message review. Returns number of messages processed."""
-  # 1. Fetch messages and close session
+  # 1. Fetch messages
   with session_context() as session:
     messages = get_messages_for_review(
       session,
@@ -24,26 +35,57 @@ async def run_review_cycle(
     )
     if not messages:
       return 0
-    # Create a detached-like copy of needed data to avoid session issues
-    # but since we are just reading, we can just keep them in memory.
-    # We need to preserve the order for index mapping.
-    message_data = [(m.id, m.dialog_id, m.account_id) for m in messages]
 
-  # 2. Process with AI (No DB connection held)
+    # We need to keep references to messages and their clients
+    # message.dialog.account is available due to joinedload
+    msg_configs = []
+    for m in messages:
+      acc = m.dialog.account
+      msg_configs.append(
+        {
+          "msg_id": m.id,
+          "api_id": acc.api_id,
+          "api_hash": acc.api_hash,
+          "session_string": acc.session_string,
+          "account_id": acc.id,
+        }
+      )
+
+  # 2. Process with AI
   batch_output = await process_messages(messages, system_prompt)
 
-  # 3. Save results in a new session
+  # 3. Resolve Telegram IDs to Usernames
   reviews_to_save = []
+  clients = {}
+
   for review_data in batch_output.reviews:
-    if review_data.index < 0 or review_data.index >= len(message_data):
+    if review_data.index < 0 or review_data.index >= len(msg_configs):
       continue
 
-    msg_id, diag_id, acc_id = message_data[review_data.index]
+    cfg = msg_configs[review_data.index]
+
+    # Resolve any TELEGRAM_ID contacts
+    for contact in review_data.contacts:
+      if contact.type == ContactType.TELEGRAM_ID:
+        try:
+          # Get or create client for this account
+          acc_id = cfg["account_id"]
+          if acc_id not in clients:
+            clients[acc_id] = await get_client(
+              cfg["api_id"], cfg["api_hash"], cfg["session_string"], account_id=acc_id
+            )
+
+          client = clients[acc_id]
+          tg_id = int(contact.value)
+          username = await resolve_username(client, tg_id)
+          if username:
+            contact.type = ContactType.TELEGRAM_USERNAME
+            contact.value = username
+        except Exception:
+          pass
 
     review = VacancyReview(
-      message_id=msg_id,
-      dialog_id=diag_id,
-      account_id=acc_id,
+      message_id=cfg["msg_id"],
       decision=review_data.decision,
       contacts=review_data.contacts,
       vacancy_position=review_data.vacancy_position,
@@ -54,6 +96,7 @@ async def run_review_cycle(
     )
     reviews_to_save.append(review)
 
+  # 4. Save results
   with session_context() as session:
     save_reviews(session, reviews_to_save)
 
