@@ -1,6 +1,66 @@
+# Front requirements
+
+# React & Frontend Development Standards
+
+This rule defines the coding standards, patterns, and architectural choices for the React-based frontend of the Manager project. Follow these strictly to ensure a maintainable, high-performance, and polished UI.
+
+## Tech Stack
+
+- **Framework**: React 19+ (Functional Components, Hooks)
+- **Build Tool**: Vite
+- **Language**: TypeScript (Strict mode)
+- **Styling**: Tailwind CSS
+- **UI Components**: Shadcn UI (Radix UI based)
+- **Data Fetching**: TanStack Query (React Query)
+- **Routing**: React Router
+- **State Management**: Zustand (Client state), React Query (Server state)
+- **Icons**: Lucide React
+
+## Component Guidelines
+
+- **Functional Components**: Always use `export function ComponentName() {}` or `const ComponentName = () => {}`.
+- **Props**: Define props using interfaces. Use destructuring with default values.
+- **Small Components**: Break down large components into smaller, single-responsibility sub-components.
+- **Lucide Icons**: Use Lucide icons for all UI iconography.
+
+## Styling & UX
+
+- **Responsive Design**: Mobile-first approach using Tailwind's `sm:`, `md:`, `lg:` modifiers.
+- **Dark Mode**: Support dark mode using Tailwind's `dark:` class.
+- **Consistency**: Use the standard spacing and color palette defined in `tailwind.config.js`.
+- **Polish**: Add subtle transitions and loading states (Skeletons) for all async actions.
+
+## State & Data Fetching
+
+- **Server State**: Use `useQuery` for fetching and `useMutation` for updates/deletes.
+- **Loading/Error**: Always handle loading and error states explicitly in the UI.
+- **Centralized API**: Create an `api/` directory with service functions for each resource (Accounts, Dialogs, etc.) as specified in the `@backend-api` rule.
+- **Auth Token**: Securely store the JWT and inject it into the `Authorization` header using an Axios or Fetch interceptor.
+
+## Folder Structure
+
+```text
+src/
+  api/          # API client and service functions
+  components/   # Reusable UI components (shadcn)
+  features/     # Feature-specific components and logic
+  hooks/        # Custom React hooks
+  lib/          # Utilities (utils.ts, constants.ts)
+  pages/        # Page-level components (routes)
+  store/        # Zustand stores
+  types/        # TypeScript interfaces/enums
+```
+
+## Performance & Quality
+
+- **Memoization**: Use `useMemo` and `useCallback` for expensive calculations or to prevent unnecessary re-renders of children.
+- **Form Handling**: Use `react-hook-form` with `zod` for validation.
+- **Type Safety**: Avoid `any`. Use strict types for all API responses.
+- **Clean Code**: 2-space indentation. No unused imports. Group imports (React, libraries, local).
+
 ---
-alwaysApply: true
----
+
+# Backend spec
 
 # Backend API & Data Model Specification
 
@@ -33,6 +93,7 @@ This rule provides the full context of the Manager Backend API, its authenticati
 ## API Reference (`/api/v1`)
 
 ### Accounts
+
 - `GET /accounts`: List user's TG accounts.
 - `POST /accounts`: Create account. Body: `TelegramAccountCreate`.
 - `GET /accounts/{id}`: Get account by ID.
@@ -40,6 +101,7 @@ This rule provides the full context of the Manager Backend API, its authenticati
 - `DELETE /accounts/{id}`: Delete account.
 
 ### Folders
+
 - `GET /folders`: List folders.
 - `POST /folders`: Create folder. Body: `FolderCreate`.
 - `GET /folders/{id}`: Get folder by ID.
@@ -47,6 +109,7 @@ This rule provides the full context of the Manager Backend API, its authenticati
 - `DELETE /folders/{id}`: Delete folder.
 
 ### Dialogs
+
 - `GET /dialogs`: List all dialogs across all user accounts.
 - `POST /dialogs`: Create dialog. Body: `DialogCreate`.
 - `GET /dialogs/{account_id}/{id}`: Get specific dialog.
@@ -54,6 +117,7 @@ This rule provides the full context of the Manager Backend API, its authenticati
 - `DELETE /dialogs/{account_id}/{id}`: Delete dialog.
 
 ### Messages
+
 - `GET /messages`: List all messages across all user accounts.
 - `POST /messages`: Create message. Body: `MessageCreate`.
 - `GET /messages/{account_id}/{dialog_id}/{id}`: Get specific message.
@@ -61,6 +125,7 @@ This rule provides the full context of the Manager Backend API, its authenticati
 - `DELETE /messages/{account_id}/{dialog_id}/{id}`: Delete message.
 
 ### Telegram native operations
+
 - `POST /telegram/fetch`: Sync all dialogs and messages. Body: `TelegramFetchRequest`.
 - `POST /telegram/fetch-chats`: Sync only dialogs. Body: `TelegramFetchChatsRequest`.
 - `POST /telegram/fetch-messages`: Sync messages for one chat. Body: `TelegramFetchMessagesRequest`.
@@ -71,9 +136,11 @@ This rule provides the full context of the Manager Backend API, its authenticati
 - `DELETE /telegram/folder/{folder_id}`: Delete TG folder.
 
 ### Agents
+
 - `POST /agents/review`: Trigger AI review agent. Body: `AgentReviewRequest`.
 
 ### Recruitment Workflow
+
 - `GET /reviews`: List all vacancy reviews.
 - `POST /reviews`: Create manual review. Body: `VacancyReviewCreate`.
 - `GET /reviews/{id}`: Get review detail.
@@ -91,11 +158,35 @@ This rule provides the full context of the Manager Backend API, its authenticati
 
 ```typescript
 // Enums
-enum DialogType { USER = "User", GROUP = "Group", CHANNEL = "Channel" }
-enum PeerType { USER = "User", CHAT = "Chat", CHANNEL = "Channel" }
-enum VacancyReviewDecision { DISMISS = "DISMISS", APPROVE = "APPROVE" }
-enum VacancyProgressStatus { NEW = "NEW", CONTACT = "CONTACT", IGNORE = "IGNORE", INTERVIEW = "INTERVIEW", REJECT = "REJECT", OFFER = "OFFER" }
-enum ContactType { PHONE = "PHONE", EMAIL = "EMAIL", TELEGRAM_USERNAME = "TELEGRAM_USERNAME", EXTERNAL_PLATFORM = "EXTERNAL_PLATFORM", OTHER = "OTHER" }
+enum DialogType {
+  USER = "User",
+  GROUP = "Group",
+  CHANNEL = "Channel",
+}
+enum PeerType {
+  USER = "User",
+  CHAT = "Chat",
+  CHANNEL = "Channel",
+}
+enum VacancyReviewDecision {
+  DISMISS = "DISMISS",
+  APPROVE = "APPROVE",
+}
+enum VacancyProgressStatus {
+  NEW = "NEW",
+  CONTACT = "CONTACT",
+  IGNORE = "IGNORE",
+  INTERVIEW = "INTERVIEW",
+  REJECT = "REJECT",
+  OFFER = "OFFER",
+}
+enum ContactType {
+  PHONE = "PHONE",
+  EMAIL = "EMAIL",
+  TELEGRAM_USERNAME = "TELEGRAM_USERNAME",
+  EXTERNAL_PLATFORM = "EXTERNAL_PLATFORM",
+  OTHER = "OTHER",
+}
 
 interface ContactDTO {
   type: ContactType;
@@ -117,8 +208,12 @@ interface TelegramAccountUpdate {
   username?: string;
 }
 
-interface FolderCreate { name: string; }
-interface FolderUpdate { name: string; }
+interface FolderCreate {
+  name: string;
+}
+interface FolderUpdate {
+  name: string;
+}
 
 interface DialogCreate {
   id: number;
@@ -128,7 +223,10 @@ interface DialogCreate {
   name?: string;
 }
 
-interface DialogUpdate { username?: string; name?: string; }
+interface DialogUpdate {
+  username?: string;
+  name?: string;
+}
 
 interface MessageCreate {
   id: number;
@@ -140,7 +238,9 @@ interface MessageCreate {
   date?: string; // ISO string
 }
 
-interface MessageUpdate { text?: string; }
+interface MessageUpdate {
+  text?: string;
+}
 
 interface VacancyReviewCreate {
   message_id: number;
