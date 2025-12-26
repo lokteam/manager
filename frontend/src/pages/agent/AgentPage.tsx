@@ -785,7 +785,7 @@ function AgentStatusDisplay({ state, onReset, onGoToVacancies }: AgentStatusDisp
 
         {steps.map((step, index) => {
           const stepIndex = steps.findIndex(s => s.key === state.step)
-          const isActive = step.key === state.step
+          const isActive = step.key === state.step && state.step !== 'complete'
           const isComplete = index < stepIndex || state.step === 'complete'
           
           return (
@@ -795,13 +795,13 @@ function AgentStatusDisplay({ state, onReset, onGoToVacancies }: AgentStatusDisp
                 isActive ? "bg-[var(--color-bg-secondary)] border-[var(--color-accent)] text-[var(--color-accent)] scale-125 ring-8 ring-[var(--color-accent-muted)]/20" : 
                 "bg-[var(--color-bg-secondary)] border-[var(--color-border)] text-[var(--color-text-muted)]"
               )}>
-                {isActive && state.step !== 'complete' ? <Loader2 className="h-6 w-6 animate-spin" /> : <step.icon className="h-6 w-6" />}
+                {isActive ? <Loader2 className="h-6 w-6 animate-spin" /> : <step.icon className="h-6 w-6" />}
               </div>
               <div className="text-center">
                 <p className={cn("text-[10px] font-black uppercase tracking-[0.1em] mb-1", 
                   isActive || isComplete ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
                 )}>{step.label}</p>
-                {isActive && !isComplete && <Badge variant="secondary" className="bg-[var(--color-accent-muted)] text-[var(--color-accent)] text-[8px] border-0 px-2 uppercase">In Progress</Badge>}
+                {isActive && <Badge variant="secondary" className="bg-[var(--color-accent-muted)] text-[var(--color-accent)] text-[8px] border-0 px-2 uppercase">In Progress</Badge>}
                 {isComplete && <Badge variant="secondary" className="bg-[var(--color-success)]/10 text-[var(--color-success)] text-[8px] border-0 px-2 uppercase">Done</Badge>}
               </div>
             </div>

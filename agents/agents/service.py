@@ -76,17 +76,19 @@ async def run_review_cycle(
             )
 
           client = clients[acc_id]
-          tg_id = int(contact.value)
-          username = await resolve_username(client, tg_id)
-          if username:
-            contact.type = ContactType.TELEGRAM_USERNAME
-            contact.value = username
+          if contact.value.isdigit():
+            tg_id = int(contact.value)
+            username = await resolve_username(client, tg_id)
+            if username:
+              contact.type = ContactType.TELEGRAM_USERNAME
+              contact.value = username
         except Exception:
           pass
 
     review = VacancyReview(
       message_id=cfg["msg_id"],
       decision=review_data.decision,
+      seniority=review_data.seniority,
       contacts=review_data.contacts,
       vacancy_position=review_data.vacancy_position,
       vacancy_description=review_data.vacancy_description,

@@ -34,6 +34,7 @@ export function TelegramPage() {
 
   // Mutations
   const deleteAccountMutation = useDeleteAccount()
+  const fetchChatsMutation = useFetchChats()
   const createFolderMutation = useCreateTelegramFolder()
   const renameFolderMutation = useRenameTelegramFolder()
   const deleteFolderMutation = useDeleteTelegramFolder()
@@ -105,6 +106,13 @@ export function TelegramPage() {
   useEffect(() => {
     setSelectedChatIds([])
   }, [selectedFolderId])
+
+  // Initial sync when account is selected
+  useEffect(() => {
+    if (selectedAccountId) {
+      fetchChatsMutation.mutate({ account_id: selectedAccountId })
+    }
+  }, [selectedAccountId])
 
   // Filtering
   const filteredDialogs = useMemo(() => {

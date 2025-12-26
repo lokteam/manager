@@ -158,6 +158,10 @@ class VacancyProgressRead(VacancyProgressCreate):
   id: int
 
 
+class VacancyProgressReadWithReview(VacancyProgressRead):
+  review: VacancyReviewRead
+
+
 # CLI-like Command Schemas
 
 

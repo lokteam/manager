@@ -14,10 +14,12 @@ from backend.auth.deps import get_current_user
 from . import schemas
 from typing import Annotated
 
+from sqlalchemy.orm import joinedload
+
 router = APIRouter(prefix="/progress", tags=["Progress"])
 
 
-@router.get("/", response_model=list[schemas.VacancyProgressRead])
+@router.get("/", response_model=list[schemas.VacancyProgressReadWithReview])
 async def get_progress_list(
   current_user: Annotated[User, Depends(get_current_user)],
   session: AsyncSession = Depends(get_async_session),
@@ -31,12 +33,13 @@ async def get_progress_list(
     .join(Dialog, Message.dialog_id == Dialog.id)
     .join(TelegramAccount, Dialog.account_id == TelegramAccount.id)
     .where(TelegramAccount.user_id == current_user.id)
+    .options(joinedload(VacancyProgress.review))
   )
   result = await session.execute(statement)
   return list(result.scalars().all())
 
 
-@router.get("/{id}", response_model=schemas.VacancyProgressRead)
+@router.get("/{id}", response_model=schemas.VacancyProgressReadWithReview)
 async def get_progress(
   id: int,
   current_user: Annotated[User, Depends(get_current_user)],
@@ -49,6 +52,7 @@ async def get_progress(
     .join(Dialog, Message.dialog_id == Dialog.id)
     .join(TelegramAccount, Dialog.account_id == TelegramAccount.id)
     .where(VacancyProgress.id == id, TelegramAccount.user_id == current_user.id)
+    .options(joinedload(VacancyProgress.review))
   )
   result = await session.execute(statement)
   progress = result.scalar_one_or_none()
@@ -57,7 +61,7 @@ async def get_progress(
   return progress
 
 
-@router.patch("/{id}", response_model=schemas.VacancyProgressRead)
+@router.patch("/{id}", response_model=schemas.VacancyProgressReadWithReview)
 async def update_progress(
   id: int,
   data: schemas.VacancyProgressUpdate,

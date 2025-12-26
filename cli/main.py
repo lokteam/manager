@@ -15,27 +15,21 @@ def backend():
   """Run the FastAPI backend server."""
   typer.echo("Starting backend server...")
   port = "8000"
-  try:
-    subprocess.run(
-      [
-        "uv",
-        "run",
-        "uvicorn",
-        "backend.main:app",
-        "--reload",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        port,
-        "--app-dir",
-        "backend/src",
-      ]
-    )
-  finally:
-    typer.echo(f"Cleaning up port {port}...")
-    subprocess.run(
-      f"lsof -i :{port} -t | xargs kill -9 2>/dev/null || true", shell=True
-    )
+  subprocess.run(
+    [
+      "uv",
+      "run",
+      "uvicorn",
+      "backend.main:app",
+      "--reload",
+      "--host",
+      "0.0.0.0",
+      "--port",
+      port,
+      "--app-dir",
+      "backend/src",
+    ]
+  )
 
 
 @app.command()
