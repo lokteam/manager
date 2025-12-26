@@ -196,6 +196,7 @@ export interface VacancyProgress {
   review_id: number
   status: VacancyProgressStatus
   comment?: string
+  review?: VacancyReview
 }
 
 export interface VacancyProgressCreate {

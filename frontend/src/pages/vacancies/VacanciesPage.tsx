@@ -73,11 +73,6 @@ export function VacanciesPage() {
   const { success, error } = useToast()
 
   // Queries
-  const { data: reviews, isLoading: reviewsLoading } = useQuery({
-    queryKey: ['reviews'],
-    queryFn: reviewsApi.getReviews,
-  })
-
   const { data: progressList, isLoading: progressLoading } = useQuery({
     queryKey: ['progress'],
     queryFn: progressApi.getProgressList,
@@ -105,7 +100,6 @@ export function VacanciesPage() {
   const deleteReviewMutation = useMutation({
     mutationFn: reviewsApi.deleteReview,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] })
       queryClient.invalidateQueries({ queryKey: ['progress'] })
       setSelectedVacancy(null)
       success('Review deleted')
@@ -117,19 +111,16 @@ export function VacanciesPage() {
 
   // Build entries by joining reviews and progress
   const entries = useMemo(() => {
-    if (!reviews || !progressList) return []
+    if (!progressList) return []
 
-    const progressByReviewId = new Map(progressList.map((p) => [p.review_id, p]))
-
-    return reviews
-      .map((review) => {
-        const progress = progressByReviewId.get(review.id)
-        if (!progress) return null
-        return { review, progress }
-      })
-      .filter((entry): entry is VacancyEntry => entry !== null)
+    return progressList
+      .filter((p) => p.review)
+      .map((progress) => ({
+        review: progress.review!,
+        progress,
+      }))
       .sort((a, b) => b.review.id - a.review.id) // Newest first
-  }, [reviews, progressList])
+  }, [progressList])
 
   // Filtered entries
   const filteredEntries = useMemo(() => {
@@ -148,7 +139,7 @@ export function VacanciesPage() {
     })
   }, [entries, search, statusFilter, seniorityFilter, accountIdFilter])
 
-  const isLoading = reviewsLoading || progressLoading
+  const isLoading = progressLoading
 
   if (isLoading) {
     return (
