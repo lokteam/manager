@@ -56,7 +56,10 @@ class PromptUpdate(SchemaBase):
 
 class PromptRead(PromptCreate):
   id: int
+  version: int
   user_id: int
+  is_deleted: bool
+  created_at: datetime
 
 
 # Folder
@@ -140,6 +143,11 @@ class VacancyReviewRead(VacancyReviewCreate):
   telegram_dialog_id: int
   telegram_message_id: int
   dialog_username: str | None = None
+  account_name: str | None = None
+  account_username: str | None = None
+  dialog_name: str | None = None
+  prompt_id: int | None = None
+  prompt_version: int | None = None
 
 
 # VacancyProgress

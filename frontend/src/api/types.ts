@@ -165,6 +165,11 @@ export interface VacancyReview {
   telegram_dialog_id: number
   telegram_message_id: number
   dialog_username?: string
+  dialog_name?: string
+  account_name?: string
+  account_username?: string
+  prompt_id?: number
+  prompt_version?: number
 }
 
 export interface VacancyReviewCreate {

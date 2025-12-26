@@ -34,6 +34,9 @@ async def get_progress_list(
       Dialog.telegram_id.label("telegram_dialog_id"),
       Message.telegram_id.label("telegram_message_id"),
       Dialog.username.label("dialog_username"),
+      Dialog.name.label("dialog_name"),
+      TelegramAccount.name.label("account_name"),
+      TelegramAccount.username.label("account_username"),
     )
     .join(VacancyReview, VacancyProgress.review_id == VacancyReview.id)
     .join(Message, VacancyReview.message_id == Message.id)
@@ -45,27 +48,19 @@ async def get_progress_list(
   result = await session.execute(statement)
 
   progress_list = []
-  for (
-    progress,
-    dialog_id,
-    account_id,
-    telegram_dialog_id,
-    telegram_message_id,
-    dialog_username,
-  ) in result.all():
-    # Progress is already loaded with review due to joinedload
-    # We need to ensure the review has the extra fields required by VacancyReviewRead
+  for row in result.all():
+    progress = row[0]
     if progress.review:
-      # Create a dict for review data and inject extra fields
       r_data = progress.review.model_dump()
-      r_data["dialog_id"] = dialog_id
-      r_data["account_id"] = account_id
-      r_data["telegram_dialog_id"] = telegram_dialog_id
-      r_data["telegram_message_id"] = telegram_message_id
-      r_data["dialog_username"] = dialog_username
+      r_data["dialog_id"] = row.dialog_id
+      r_data["account_id"] = row.account_id
+      r_data["telegram_dialog_id"] = row.telegram_dialog_id
+      r_data["telegram_message_id"] = row.telegram_message_id
+      r_data["dialog_username"] = row.dialog_username
+      r_data["dialog_name"] = row.dialog_name
+      r_data["account_name"] = row.account_name
+      r_data["account_username"] = row.account_username
 
-      # Use model_validate to create a VacancyReviewRead object (or just keep as dict)
-      # Pydantic will handle dict if it matches schema
       progress_dict = progress.model_dump()
       progress_dict["review"] = r_data
       progress_list.append(progress_dict)
@@ -87,6 +82,9 @@ async def get_progress(
       Dialog.telegram_id.label("telegram_dialog_id"),
       Message.telegram_id.label("telegram_message_id"),
       Dialog.username.label("dialog_username"),
+      Dialog.name.label("dialog_name"),
+      TelegramAccount.name.label("account_name"),
+      TelegramAccount.username.label("account_username"),
     )
     .join(VacancyReview, VacancyProgress.review_id == VacancyReview.id)
     .join(Message, VacancyReview.message_id == Message.id)
@@ -100,23 +98,18 @@ async def get_progress(
   if not row:
     raise HTTPException(status_code=404, detail="Progress record not found")
 
-  (
-    progress,
-    dialog_id,
-    account_id,
-    telegram_dialog_id,
-    telegram_message_id,
-    dialog_username,
-  ) = row
-
+  progress = row[0]
   progress_dict = progress.model_dump()
   if progress.review:
     r_data = progress.review.model_dump()
-    r_data["dialog_id"] = dialog_id
-    r_data["account_id"] = account_id
-    r_data["telegram_dialog_id"] = telegram_dialog_id
-    r_data["telegram_message_id"] = telegram_message_id
-    r_data["dialog_username"] = dialog_username
+    r_data["dialog_id"] = row.dialog_id
+    r_data["account_id"] = row.account_id
+    r_data["telegram_dialog_id"] = row.telegram_dialog_id
+    r_data["telegram_message_id"] = row.telegram_message_id
+    r_data["dialog_username"] = row.dialog_username
+    r_data["dialog_name"] = row.dialog_name
+    r_data["account_name"] = row.account_name
+    r_data["account_username"] = row.account_username
     progress_dict["review"] = r_data
 
   return progress_dict
@@ -137,6 +130,9 @@ async def update_progress(
       Dialog.telegram_id.label("telegram_dialog_id"),
       Message.telegram_id.label("telegram_message_id"),
       Dialog.username.label("dialog_username"),
+      Dialog.name.label("dialog_name"),
+      TelegramAccount.name.label("account_name"),
+      TelegramAccount.username.label("account_username"),
     )
     .join(VacancyReview, VacancyProgress.review_id == VacancyReview.id)
     .join(Message, VacancyReview.message_id == Message.id)
@@ -150,15 +146,7 @@ async def update_progress(
   if not row:
     raise HTTPException(status_code=404, detail="Progress record not found")
 
-  (
-    progress,
-    dialog_id,
-    account_id,
-    telegram_dialog_id,
-    telegram_message_id,
-    dialog_username,
-  ) = row
-
+  progress = row[0]
   update_data = data.model_dump(exclude_unset=True)
   for key, value in update_data.items():
     setattr(progress, key, value)
@@ -170,11 +158,14 @@ async def update_progress(
   progress_dict = progress.model_dump()
   if progress.review:
     r_data = progress.review.model_dump()
-    r_data["dialog_id"] = dialog_id
-    r_data["account_id"] = account_id
-    r_data["telegram_dialog_id"] = telegram_dialog_id
-    r_data["telegram_message_id"] = telegram_message_id
-    r_data["dialog_username"] = dialog_username
+    r_data["dialog_id"] = row.dialog_id
+    r_data["account_id"] = row.account_id
+    r_data["telegram_dialog_id"] = row.telegram_dialog_id
+    r_data["telegram_message_id"] = row.telegram_message_id
+    r_data["dialog_username"] = row.dialog_username
+    r_data["dialog_name"] = row.dialog_name
+    r_data["account_name"] = row.account_name
+    r_data["account_username"] = row.account_username
     progress_dict["review"] = r_data
 
   return progress_dict

@@ -223,6 +223,8 @@ class VacancyReview(SQLModel, table=True):
   vacancy_requirements: list[str] | None = Field(sa_column=Column(JSON), default=None)
   salary_fork_from: int | None = None
   salary_fork_to: int | None = None
+  prompt_id: int | None = Field(default=None)
+  prompt_version: int | None = Field(default=None)
 
   message: Message = Relationship(back_populates="review")
   vacancy: "VacancyProgress" = Relationship(
@@ -250,10 +252,13 @@ class VacancyProgress(SQLModel, table=True):
 
 
 class Prompt(SQLModel, table=True):
-  id: int | None = Field(default=None, primary_key=True)
+  id: int = Field(primary_key=True)
+  version: int = Field(primary_key=True, default=1)
   user_id: int = Field(foreign_key="user.id")
   name: str = Field(index=True)
   description: str | None = None
   content: str
+  is_deleted: bool = Field(default=False, index=True)
+  created_at: datetime = Field(default_factory=datetime.utcnow)
 
   user: User = Relationship(back_populates="prompts")

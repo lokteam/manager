@@ -66,3 +66,34 @@ export function useDeletePrompt() {
     },
   })
 }
+
+export function useTrashPrompts() {
+  return useQuery({
+    queryKey: ['prompts', 'trash'],
+    queryFn: promptsApi.getTrashPrompts,
+  })
+}
+
+export function usePromptHistory(id: number | null) {
+  return useQuery({
+    queryKey: ['prompts', id, 'history'],
+    queryFn: () => (id ? promptsApi.getPromptHistory(id) : Promise.resolve([])),
+    enabled: !!id,
+  })
+}
+
+export function useRestorePrompt() {
+  const queryClient = useQueryClient()
+  const { success, error } = useToast()
+
+  return useMutation({
+    mutationFn: promptsApi.restorePrompt,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prompts'] })
+      success('Prompt restored successfully')
+    },
+    onError: (err) => {
+      error(err instanceof HttpError ? err.message : 'Failed to restore prompt')
+    },
+  })
+}

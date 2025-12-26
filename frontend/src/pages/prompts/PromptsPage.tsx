@@ -1,21 +1,47 @@
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, BookOpen } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Pencil, Trash2, BookOpen, ChevronLeft, ChevronRight, History, Trash } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { usePrompts, useCreatePrompt, useUpdatePrompt, useDeletePrompt } from '@/hooks'
+import { 
+  usePrompts, 
+  useTrashPrompts,
+  usePromptHistory,
+  useCreatePrompt, 
+  useUpdatePrompt, 
+  useDeletePrompt,
+  useRestorePrompt
+} from '@/hooks'
 import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Input, Textarea, Modal, Spinner } from '@/components/ui'
 import { type Prompt } from '@/api/prompts'
+import { cn } from '@/lib/utils'
 
 export function PromptsPage() {
-  const { data: prompts = [], isLoading } = usePrompts()
+  const [showTrash, setShowTrash] = useState(false)
+  const { data: activePrompts = [], isLoading: isActiveLoading } = usePrompts()
+  const { data: trashPrompts = [], isLoading: isTrashLoading } = useTrashPrompts()
+  const prompts = showTrash ? trashPrompts : activePrompts
+  const isLoading = isActiveLoading || isTrashLoading
+
   const createPrompt = useCreatePrompt()
   const updatePrompt = useUpdatePrompt()
   const deletePrompt = useDeletePrompt()
+  const restorePrompt = useRestorePrompt()
 
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [viewingPrompt, setViewingPrompt] = useState<Prompt | null>(null)
+  const [viewingPromptId, setViewingPromptId] = useState<number | null>(null)
+  const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [formData, setFormData] = useState({ name: '', description: '', content: '' })
+
+  const { data: history = [] } = usePromptHistory(viewingPromptId)
+
+  const viewingPrompt = useMemo(() => {
+    if (!viewingPromptId) return null
+    if (viewingVersion) {
+      return history.find(p => p.version === viewingVersion) || history[0]
+    }
+    return history[0]
+  }, [history, viewingPromptId, viewingVersion])
 
   const handleOpenModal = (prompt?: Prompt) => {
     if (prompt) {
@@ -29,7 +55,18 @@ export function PromptsPage() {
   }
 
   const handleViewPrompt = (prompt: Prompt) => {
-    setViewingPrompt(prompt)
+    setViewingPromptId(prompt.id)
+    setViewingVersion(prompt.version)
+  }
+
+  const navigateVersion = (direction: 'next' | 'prev') => {
+    if (!history.length || !viewingPrompt) return
+    const currentIndex = history.findIndex(p => p.version === viewingPrompt.version)
+    if (direction === 'prev' && currentIndex < history.length - 1) {
+      setViewingVersion(history[currentIndex + 1].version)
+    } else if (direction === 'next' && currentIndex > 0) {
+      setViewingVersion(history[currentIndex - 1].version)
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -51,13 +88,25 @@ export function PromptsPage() {
     <div className="mx-auto max-w-5xl space-y-8 py-8 px-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Agent Prompts</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Agent Prompts ({prompts.length})</h1>
           <p className="text-[var(--color-text-secondary)] mt-1">Manage AI prompts for message analysis</p>
         </div>
-        <Button onClick={() => handleOpenModal()} className="rounded-xl shadow-lg">
-          <Plus className="h-5 w-5" />
-          Add Prompt
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            variant="secondary" 
+            onClick={() => setShowTrash(!showTrash)}
+            className={cn("rounded-xl", showTrash && "bg-[var(--color-bg-tertiary)] border-[var(--color-accent)]")}
+          >
+            {showTrash ? <BookOpen className="h-5 w-5" /> : <Trash className="h-5 w-5" />}
+            {showTrash ? 'Active' : 'Trash'}
+          </Button>
+          {!showTrash && (
+            <Button onClick={() => handleOpenModal()} className="rounded-xl shadow-lg">
+              <Plus className="h-5 w-5" />
+              Add Prompt
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -71,24 +120,38 @@ export function PromptsPage() {
               <div className="flex justify-between items-start">
                 <CardTitle className="text-lg font-bold truncate pr-2">{prompt.name}</CardTitle>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleOpenModal(prompt)
-                    }} 
-                    className="p-1.5 hover:bg-[var(--color-bg-tertiary)] rounded-md text-[var(--color-text-secondary)]"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (confirm('Delete this prompt?')) deletePrompt.mutate(prompt.id)
-                    }}
-                    className="p-1.5 hover:bg-red-500/10 rounded-md text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {!showTrash ? (
+                    <>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleOpenModal(prompt)
+                        }} 
+                        className="p-1.5 hover:bg-[var(--color-bg-tertiary)] rounded-md text-[var(--color-text-secondary)]"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (confirm('Delete this prompt?')) deletePrompt.mutate(prompt.id)
+                        }}
+                        className="p-1.5 hover:bg-red-500/10 rounded-md text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        restorePrompt.mutate(prompt.id)
+                      }}
+                      className="p-1.5 hover:bg-[var(--color-accent-muted)] rounded-md text-[var(--color-accent)]"
+                    >
+                      Restore
+                    </button>
+                  )}
                 </div>
               </div>
               <CardDescription className="line-clamp-2 min-h-[2.5rem]">{prompt.description || 'No description'}</CardDescription>
@@ -154,24 +217,49 @@ export function PromptsPage() {
       </Modal>
 
       <Modal
-        open={!!viewingPrompt}
-        onClose={() => setViewingPrompt(null)}
+        open={!!viewingPromptId}
+        onClose={() => setViewingPromptId(null)}
         title={viewingPrompt?.name || ''}
         className="max-w-4xl w-[90vw] max-h-[85vh] flex flex-col"
       >
         <div className="flex flex-col h-full overflow-hidden">
-          {viewingPrompt?.description && (
-            <p className="text-[var(--color-text-secondary)] mb-6 pb-6 border-b border-[var(--color-border)]">
-              {viewingPrompt.description}
-            </p>
-          )}
+          <div className="flex items-center justify-between mb-4 pb-4 border-b border-[var(--color-border)]">
+            <div className="text-sm text-[var(--color-text-secondary)]">
+              {viewingPrompt?.description || 'No description'}
+            </div>
+            <div className="flex items-center gap-4 bg-[var(--color-bg-tertiary)] px-3 py-1.5 rounded-lg border border-[var(--color-border)]">
+              <span className="text-xs font-mono font-medium text-[var(--color-text-muted)]">
+                Version {viewingPrompt?.version} / {history[0]?.version}
+              </span>
+              <div className="flex gap-1 border-l border-[var(--color-border)] pl-3">
+                <button 
+                  onClick={() => navigateVersion('prev')}
+                  disabled={!viewingPrompt || history.findIndex(p => p.version === viewingPrompt.version) === history.length - 1}
+                  className="p-1 hover:bg-[var(--color-bg-elevated)] disabled:opacity-30 rounded transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button 
+                  onClick={() => navigateVersion('next')}
+                  disabled={!viewingPrompt || history.findIndex(p => p.version === viewingPrompt.version) === 0}
+                  className="p-1 hover:bg-[var(--color-bg-elevated)] disabled:opacity-30 rounded transition-colors"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <div className="prose prose-invert prose-teal max-w-none prose-headings:font-bold prose-p:leading-relaxed prose-li:my-0">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{viewingPrompt?.content || ''}</ReactMarkdown>
             </div>
           </div>
-          <div className="flex justify-end pt-6 mt-6 border-t border-[var(--color-border)]">
-            <Button variant="secondary" onClick={() => setViewingPrompt(null)}>Close</Button>
+          <div className="flex justify-between items-center pt-6 mt-6 border-t border-[var(--color-border)]">
+            <div className="text-[10px] text-[var(--color-text-muted)] flex items-center gap-1">
+              <History className="h-3 w-3" />
+              Last modified: {viewingPrompt && new Date(viewingPrompt.created_at).toLocaleString()}
+            </div>
+            <Button variant="secondary" onClick={() => setViewingPromptId(null)}>Close</Button>
           </div>
         </div>
       </Modal>

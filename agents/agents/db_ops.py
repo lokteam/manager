@@ -6,7 +6,6 @@ from shared.models import (
   VacancyProgress,
   VacancyReviewDecision,
   Dialog,
-  TelegramAccount,
 )
 
 

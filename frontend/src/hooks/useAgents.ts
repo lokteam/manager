@@ -8,7 +8,7 @@ export function useRunAgentReview() {
   const { success, error } = useToast()
 
   return useMutation({
-    mutationFn: (data: AgentReviewRequest = {}) => agentsApi.runAgentReview(data),
+    mutationFn: (data: AgentReviewRequest) => agentsApi.runAgentReview(data),
     onSuccess: () => {
       // Invalidate reviews and progress as the agent creates new records
       queryClient.invalidateQueries({ queryKey: ['reviews'] })

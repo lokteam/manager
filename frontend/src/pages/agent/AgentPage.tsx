@@ -544,7 +544,7 @@ export function AgentPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-center mb-1 gap-2">
                                 <span className={cn("font-black text-base truncate", selectedPromptId === p.id.toString() ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]")}>{p.name}</span>
-                                {selectedPromptId === p.id.toString() && <Badge variant="secondary" className="bg-[var(--color-accent)] text-white border-0 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase shrink-0">Active</Badge>}
+                                {selectedPromptId === p.id.toString() && <Badge variant="default" className="bg-[var(--color-accent)] text-white border-0 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase shrink-0">Active</Badge>}
                               </div>
                               <p className="text-xs text-[var(--color-text-secondary)] line-clamp-2 opacity-80 leading-relaxed">{p.description || 'No description provided for this analysis strategy.'}</p>
                             </div>
@@ -767,7 +767,8 @@ function AgentStatusDisplay({ state, onReset, onGoToVacancies }: AgentStatusDisp
         <h3 className="text-2xl font-black text-[var(--color-text-primary)] mb-3">Agent Interrupted</h3>
         <p className="text-sm text-[var(--color-text-secondary)] mb-10 opacity-80 leading-relaxed">{state.message}</p>
         <div className="flex gap-4 w-full shrink-0">
-           <Button onClick={onReset} variant="secondary" className="flex-1 py-6 rounded-2xl font-bold">Adjust Settings</Button>
+            <Button onClick={onReset} variant="secondary" className="flex-1 py-6 rounded-2xl font-bold">Adjust Settings</Button>
+
            <Button onClick={onReset} className="flex-1 py-6 rounded-2xl font-bold bg-red-500 hover:bg-red-600 border-0">Restart Agent</Button>
         </div>
       </div>
@@ -801,8 +802,8 @@ function AgentStatusDisplay({ state, onReset, onGoToVacancies }: AgentStatusDisp
                 <p className={cn("text-[10px] font-black uppercase tracking-[0.1em] mb-1", 
                   isActive || isComplete ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
                 )}>{step.label}</p>
-                {isActive && <Badge variant="secondary" className="bg-[var(--color-accent-muted)] text-[var(--color-accent)] text-[8px] border-0 px-2 uppercase">In Progress</Badge>}
-                {isComplete && <Badge variant="secondary" className="bg-[var(--color-success)]/10 text-[var(--color-success)] text-[8px] border-0 px-2 uppercase">Done</Badge>}
+                {isActive && <Badge variant="default" className="bg-[var(--color-accent-muted)] text-[var(--color-accent)] text-[8px] border-0 px-2 uppercase">In Progress</Badge>}
+                {isComplete && <Badge variant="default" className="bg-[var(--color-success)]/10 text-[var(--color-success)] text-[8px] border-0 px-2 uppercase">Done</Badge>}
               </div>
             </div>
           )

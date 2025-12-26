@@ -2,9 +2,6 @@ from shared.models import (
   session_context,
   VacancyReview,
   Prompt,
-  Message,
-  Dialog,
-  TelegramAccount,
   ContactType,
 )
 from .db_ops import get_messages_for_review, save_reviews
@@ -16,6 +13,8 @@ from sqlmodel import select
 
 async def run_review_cycle(
   system_prompt: str,
+  prompt_id: int | None = None,
+  prompt_version: int | None = None,
   batch_size: int = 10,
   account_id: int | None = None,
   chat_id: int | None = None,
@@ -95,6 +94,8 @@ async def run_review_cycle(
       vacancy_requirements=review_data.vacancy_requirements,
       salary_fork_from=review_data.salary_fork_from,
       salary_fork_to=review_data.salary_fork_to,
+      prompt_id=prompt_id,
+      prompt_version=prompt_version,
     )
     reviews_to_save.append(review)
 
@@ -115,10 +116,18 @@ async def review_messages(
 ):
   # Fetch prompt content
   with session_context() as session:
-    prompt = session.get(Prompt, prompt_id)
+    # Get the latest version of the prompt
+    statement = (
+      select(Prompt)
+      .where(Prompt.id == prompt_id)
+      .order_by(Prompt.version.desc())
+      .limit(1)
+    )
+    prompt = session.exec(statement).first()
     if not prompt:
       raise ValueError(f"Prompt with ID {prompt_id} not found")
     system_prompt = prompt.content
+    prompt_version = prompt.version
 
   processed_total = 0
   while True:
@@ -131,7 +140,9 @@ async def review_messages(
 
     num_processed = await run_review_cycle(
       system_prompt,
-      batch_size,
+      prompt_id=prompt_id,
+      prompt_version=prompt_version,
+      batch_size=batch_size,
       account_id=account_id,
       chat_id=chat_id,
       folder_id=folder_id,
