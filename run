@@ -1,1 +1,1 @@
-cd /home/alex/projects/manager && uv run --env-file .env main.py "$@"
+cd /home/alex/projects/manager/backend && uv run --env-file .env main.py "$@"

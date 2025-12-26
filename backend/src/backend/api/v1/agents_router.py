@@ -18,11 +18,15 @@ async def review(
   session: AsyncSession = Depends(get_async_session),
 ):
   # 1. Verify prompt ownership
-  statement = select(Prompt).where(
-    Prompt.id == params.prompt_id, Prompt.user_id == user.id
+  statement = (
+    select(Prompt)
+    .where(Prompt.id == params.prompt_id, Prompt.user_id == user.id)
+    .order_by(Prompt.version.desc())
+    .limit(1)
   )
   result = await session.execute(statement)
   prompt = result.scalar_one_or_none()
+
   if not prompt:
     raise HTTPException(status_code=404, detail="Prompt not found or access denied")
 

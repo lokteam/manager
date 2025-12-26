@@ -88,6 +88,7 @@ async def run_review_cycle(
       message_id=cfg["msg_id"],
       decision=review_data.decision,
       seniority=review_data.seniority,
+      experience=review_data.experience,
       contacts=review_data.contacts,
       vacancy_position=review_data.vacancy_position,
       vacancy_description=review_data.vacancy_description,

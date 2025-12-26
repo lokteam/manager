@@ -5,7 +5,7 @@ from enum import Enum
 from datetime import datetime
 from typing import Generator, AsyncGenerator
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field as PydanticField
 from sqlmodel import SQLModel, Field, Relationship, create_engine, Session, Column
 from sqlalchemy import JSON, event, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -19,7 +19,7 @@ ASYNC_DB_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
 def pydantic_encoder(obj):
   if hasattr(obj, "model_dump"):
-    return obj.model_dump()
+    return obj.model_dump(by_alias=True)
   if isinstance(obj, Enum):
     return obj.name
   raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
@@ -207,6 +207,21 @@ class Seniority(EnumCat):
   LEAD = "LEAD"
 
 
+class Experience(BaseModel):
+  from_years: int | None = PydanticField(
+    default=None,
+    alias="from",
+    serialization_alias="from",
+    description="Starting years of experience",
+  )
+  to_years: int | None = PydanticField(
+    default=None,
+    alias="to",
+    serialization_alias="to",
+    description="Ending years of experience",
+  )
+
+
 class ContactDTO(BaseModel):
   type: ContactType = Field(description="Type of contact")
   value: str = Field(description="Contact value (email, phone, etc.)")
@@ -218,6 +233,7 @@ class VacancyReview(SQLModel, table=True):
   decision: VacancyReviewDecision
   contacts: list[ContactDTO] = Field(sa_column=Column(JSON), default_factory=list)
   seniority: Seniority | None = Field(default=None, index=True)
+  experience: Experience | None = Field(sa_column=Column(JSON), default=None)
   vacancy_position: str
   vacancy_description: str
   vacancy_requirements: list[str] | None = Field(sa_column=Column(JSON), default=None)

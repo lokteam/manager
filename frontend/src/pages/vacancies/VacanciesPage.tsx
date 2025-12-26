@@ -7,7 +7,6 @@ import {
   Mail,
   Phone,
   AtSign,
-  DollarSign,
   Briefcase,
   FileText,
   X,
@@ -41,7 +40,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { HttpError } from "@/api/http";
-import { cn, formatSalary } from "@/lib/utils";
+import { cn, formatSalary, formatExperience } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
   { value: "ALL", label: "All Statuses" },
@@ -70,6 +69,16 @@ const SENIORITY_OPTIONS = [
   { value: Seniority.LEAD, label: "Lead" },
 ];
 
+const EXPERIENCE_OPTIONS = [
+  { value: "ALL", label: "All Experience" },
+  { value: "NOT_SPECIFIED", label: "Not Specified" },
+  { value: "0-1", label: "0-1 years", min: 0, max: 1 },
+  { value: "1-3", label: "1-3 years", min: 1, max: 3 },
+  { value: "3-5", label: "3-5 years", min: 3, max: 5 },
+  { value: "5-8", label: "5-8 years", min: 5, max: 8 },
+  { value: "8+", label: "8+ years", min: 8, max: 100 },
+];
+
 interface VacancyEntry {
   review: VacancyReview;
   progress: VacancyProgress;
@@ -82,6 +91,7 @@ export function VacanciesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [seniorityFilter, setSeniorityFilter] = useState("ALL");
+  const [experienceFilter, setExperienceFilter] = useState("ALL");
   const [accountIdFilter, setAccountIdFilter] = useState("ALL");
 
   const queryClient = useQueryClient();
@@ -159,15 +169,54 @@ export function VacanciesPage() {
       const matchesSeniority =
         seniorityFilter === "ALL" || entry.review.seniority === seniorityFilter;
 
+      const matchesExperience = (() => {
+        if (experienceFilter === "ALL") return true;
+        if (experienceFilter === "NOT_SPECIFIED") {
+          return (
+            !entry.review.experience ||
+            (entry.review.experience.from === null &&
+              entry.review.experience.to === null)
+          );
+        }
+
+        const option = EXPERIENCE_OPTIONS.find(
+          (o) => o.value === experienceFilter
+        );
+        if (!option) return true;
+
+        const exp = entry.review.experience;
+        if (!exp) return false;
+
+        const vMin = exp.from ?? 0;
+        const vMax = exp.to ?? 100;
+
+        // Check for overlap: max(start1, start2) <= min(end1, end2)
+        const start = Math.max(option.min!, vMin);
+        const end = Math.min(option.max!, vMax);
+
+        return start <= end;
+      })();
+
       const matchesAccount =
         accountIdFilter === "ALL" ||
         entry.review.account_id.toString() === accountIdFilter;
 
       return (
-        matchesSearch && matchesStatus && matchesSeniority && matchesAccount
+        matchesSearch &&
+        matchesStatus &&
+        matchesSeniority &&
+        matchesAccount &&
+        matchesExperience
       );
     });
-  }, [entries, search, statusFilter, seniorityFilter, accountIdFilter]);
+  }, [
+    entries,
+    search,
+    statusFilter,
+    seniorityFilter,
+    accountIdFilter,
+    experienceFilter,
+  ]);
 
   const isLoading = progressLoading;
 
@@ -222,6 +271,14 @@ export function VacanciesPage() {
             />
           </div>
 
+          <div className="w-40">
+            <Select
+              value={experienceFilter}
+              onChange={(e) => setExperienceFilter(e.target.value)}
+              options={EXPERIENCE_OPTIONS}
+            />
+          </div>
+
           <div className="w-48">
             <Select
               value={accountIdFilter}
@@ -259,6 +316,7 @@ export function VacanciesPage() {
                   setSearch("");
                   setStatusFilter("ALL");
                   setSeniorityFilter("ALL");
+                  setExperienceFilter("ALL");
                   setAccountIdFilter("ALL");
                 }}
               >
@@ -345,6 +403,14 @@ function VacancyListItem({
                 {review.seniority}
               </Badge>
             )}
+            {(review.experience?.from || review.experience?.to) && (
+              <Badge
+                variant="default"
+                className="bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]"
+              >
+                {formatExperience(review.experience.from, review.experience.to)}
+              </Badge>
+            )}
             <Badge
               variant={
                 (statusOption?.color as
@@ -368,8 +434,13 @@ function VacancyListItem({
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-3 border-t border-[var(--color-border)]/50 mt-2">
           {(review.salary_fork_from || review.salary_fork_to) && (
             <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--color-success)]">
-              <DollarSign className="h-4 w-4" />
               {formatSalary(review.salary_fork_from, review.salary_fork_to)}
+            </div>
+          )}
+          {(review.experience?.from || review.experience?.to) && (
+            <div className="flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
+              <Briefcase className="h-4 w-4" />
+              {formatExperience(review.experience.from, review.experience.to)}
             </div>
           )}
         </div>
@@ -465,27 +536,7 @@ function ContactInfo({ contact }: { contact: ContactDTO }) {
 }
 
 // Small version for list items
-function ContactIconSmall({ type }: { type: ContactType }) {
-  const icons: Record<
-    ContactType,
-    React.ComponentType<{ className?: string }>
-  > = {
-    [ContactType.EMAIL]: Mail,
-    [ContactType.PHONE]: Phone,
-    [ContactType.TELEGRAM_USERNAME]: AtSign,
-    [ContactType.TELEGRAM_ID]: MessageCircle,
-    [ContactType.EXTERNAL_PLATFORM]: ExternalLink,
-    [ContactType.OTHER]: FileText,
-  };
-
-  const Icon = icons[type] || FileText;
-
-  return (
-    <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--color-bg-tertiary)] text-[var(--color-text-muted)]">
-      <Icon className="h-3.5 w-3.5" />
-    </div>
-  );
-}
+// (removed unused ContactIconSmall)
 
 function PromptViewModal({
   promptId,
@@ -607,6 +658,14 @@ function VacancyDetailModal({
                 {review.seniority}
               </Badge>
             )}
+            {(review.experience?.from || review.experience?.to) && (
+              <Badge
+                variant="default"
+                className="bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]"
+              >
+                {formatExperience(review.experience.from, review.experience.to)}
+              </Badge>
+            )}
             <a
               href={getTelegramLink()}
               target="_blank"
@@ -617,11 +676,31 @@ function VacancyDetailModal({
               Original Message
             </a>
           </div>
-          {(review.salary_fork_from || review.salary_fork_to) && (
-            <p className="mt-1 text-lg text-[var(--color-success)]">
-              {formatSalary(review.salary_fork_from, review.salary_fork_to)}
-            </p>
-          )}
+          <div className="flex items-center gap-4 mt-1">
+            {(review.salary_fork_from || review.salary_fork_to) && (
+              <p className="text-lg text-[var(--color-success)] font-bold">
+                {formatSalary(review.salary_fork_from, review.salary_fork_to)}
+              </p>
+            )}
+            {(review.experience?.from || review.experience?.to) ? (
+              <div className="flex items-center gap-1.5 text-[var(--color-text-secondary)]">
+                <Briefcase className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {formatExperience(
+                    review.experience.from,
+                    review.experience.to
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-[var(--color-text-muted)]">
+                <Briefcase className="h-4 w-4" />
+                <span className="text-sm font-medium italic">
+                  Exp: Not specified
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}

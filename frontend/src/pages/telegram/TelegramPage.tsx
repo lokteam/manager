@@ -30,7 +30,24 @@ export function TelegramPage() {
   // Data Fetching
   const { data: accounts = [], isLoading: isLoadingAccounts } = useAccounts()
   const { data: allDialogs = [], isLoading: isLoadingDialogs } = useDialogs()
-  const { data: folders = [] } = useTelegramFolders(selectedAccountId)
+
+  const activeAccountId = selectedAccountId ?? accounts?.[0]?.id ?? null
+  const { data: folders = [] } = useTelegramFolders(activeAccountId)
+
+  // Reset folder and selection when account changes
+  const [prevAccountId, setPrevAccountId] = useState<number | null>(null)
+  if (activeAccountId !== prevAccountId) {
+    setPrevAccountId(activeAccountId)
+    setSelectedFolderId(null)
+    setSelectedChatIds([])
+  }
+
+  // Reset selection when folder changes
+  const [prevFolderId, setPrevFolderId] = useState<number | null>(null)
+  if (selectedFolderId !== prevFolderId) {
+    setPrevFolderId(selectedFolderId)
+    setSelectedChatIds([])
+  }
 
   // Mutations
   const deleteAccountMutation = useDeleteAccount()
@@ -42,14 +59,14 @@ export function TelegramPage() {
   const bulkRemoveChatsMutation = useBulkRemoveChatsFromFolder()
 
   const handleDropChatsToFolder = (chatIds: number[], folderId: number) => {
-    if (selectedAccountId) {
+    if (activeAccountId) {
       const telegramIds = chatIds
         .map(id => allDialogs.find(d => d.id === id)?.telegram_id)
         .filter((id): id is number => id !== undefined);
 
       bulkAddChatsMutation.mutate({
-        account_id: selectedAccountId,
-        folder_id: folderId,
+        account_id: activeAccountId,
+        folderId,
         chat_ids: telegramIds
       }, {
         onSuccess: () => {
@@ -60,7 +77,7 @@ export function TelegramPage() {
   };
 
   const handleRemoveChatsFromFolder = (chatIds: number[], folderId: number) => {
-    if (!selectedAccountId) return;
+    if (!activeAccountId) return;
 
     const telegramIds = chatIds
       .map(id => allDialogs.find(d => d.id === id)?.telegram_id)
@@ -72,7 +89,7 @@ export function TelegramPage() {
       
       if (remainingChats.length === 0) {
         if (confirm(`Removing all chats from "${folder.title}" will delete the folder. Proceed?`)) {
-          deleteFolderMutation.mutate({ folderId, accountId: selectedAccountId }, {
+          deleteFolderMutation.mutate({ folderId, accountId: activeAccountId }, {
             onSuccess: () => {
               setSelectedFolderId(null);
             }
@@ -83,42 +100,24 @@ export function TelegramPage() {
     }
 
     bulkRemoveChatsMutation.mutate({
-      account_id: selectedAccountId,
-      folder_id: folderId,
+      account_id: activeAccountId,
+      folderId,
       chat_ids: telegramIds
     });
   };
 
-  // Set default account
-  useEffect(() => {
-    if (!selectedAccountId && accounts.length > 0) {
-      setSelectedAccountId(accounts[0].id)
-    }
-  }, [accounts, selectedAccountId])
-
-  // Reset folder and selection when account changes
-  useEffect(() => {
-    setSelectedFolderId(null)
-    setSelectedChatIds([])
-  }, [selectedAccountId])
-
-  // Reset selection when folder changes
-  useEffect(() => {
-    setSelectedChatIds([])
-  }, [selectedFolderId])
-
   // Initial sync when account is selected
   useEffect(() => {
-    if (selectedAccountId) {
-      fetchChatsMutation.mutate({ account_id: selectedAccountId })
+    if (activeAccountId) {
+      fetchChatsMutation.mutate({ account_id: activeAccountId })
     }
-  }, [selectedAccountId])
+  }, [activeAccountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtering
   const filteredDialogs = useMemo(() => {
-    if (!selectedAccountId) return []
+    if (!activeAccountId) return []
 
-    let dialogs = allDialogs.filter((d) => d.account_id === selectedAccountId)
+    let dialogs = allDialogs.filter((d) => d.account_id === activeAccountId)
 
     if (selectedFolderId) {
       const folder = folders.find((f) => f.id === selectedFolderId)
@@ -129,7 +128,7 @@ export function TelegramPage() {
     }
 
     return dialogs
-  }, [allDialogs, selectedAccountId, selectedFolderId, folders])
+  }, [allDialogs, activeAccountId, selectedFolderId, folders])
 
   // Account Mutations
   const createMutation = useMutation({
@@ -187,27 +186,27 @@ export function TelegramPage() {
   }
 
   const handleCreateFolder = (title: string) => {
-    if (selectedAccountId) {
-      createFolderMutation.mutate({ account_id: selectedAccountId, title })
+    if (activeAccountId) {
+      createFolderMutation.mutate({ account_id: activeAccountId, title })
     }
   }
 
   const handleRenameFolder = (folderId: number, title: string) => {
-    if (selectedAccountId) {
-      renameFolderMutation.mutate({ account_id: selectedAccountId, folder_id: folderId, title })
+    if (activeAccountId) {
+      renameFolderMutation.mutate({ account_id: activeAccountId, folder_id: folderId, title })
     }
   }
 
   const handleDeleteFolder = (folderId: number) => {
-    if (selectedAccountId) {
-      deleteFolderMutation.mutate({ folderId, accountId: selectedAccountId })
+    if (activeAccountId) {
+      deleteFolderMutation.mutate({ folderId, accountId: activeAccountId })
     }
   }
 
   const handleDeleteAccount = (id: number) => {
     deleteAccountMutation.mutate(id, {
       onSuccess: () => {
-        if (selectedAccountId === id) {
+        if (activeAccountId === id) {
           setSelectedAccountId(accounts.find(a => a.id !== id)?.id || null)
         }
       }
@@ -222,7 +221,7 @@ export function TelegramPage() {
           <label className="label text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Active Telegram Account</label>
           <AccountSwitcher
             accounts={accounts}
-            selectedAccountId={selectedAccountId}
+            selectedAccountId={activeAccountId}
             onSelectAccount={setSelectedAccountId}
             onAddAccount={handleAddAccount}
             onDeleteAccount={handleDeleteAccount}
@@ -230,7 +229,7 @@ export function TelegramPage() {
         </div>
 
         {/* Folder List */}
-        {selectedAccountId && (
+        {activeAccountId && (
           <div className="space-y-2 w-full">
             <label className="label text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Folders</label>
             <div className="flex justify-center">
@@ -252,7 +251,7 @@ export function TelegramPage() {
 
       {/* Chat List */}
       <div className="w-full max-w-2xl flex-1 min-h-0 bg-[var(--color-bg-secondary)] rounded-[2rem] border-2 border-[var(--color-border)] shadow-2xl flex flex-col overflow-hidden">
-        {selectedAccountId ? (
+        {activeAccountId ? (
           <div className="flex-1 overflow-y-auto text-left">
             <ChatList
               chats={filteredDialogs}

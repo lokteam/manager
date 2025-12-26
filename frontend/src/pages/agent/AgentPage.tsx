@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -85,22 +85,13 @@ export function AgentPage() {
 
   const { data: prompts } = usePrompts()
 
-  useEffect(() => {
-    if (accounts?.length && !selectedAccountId) {
-      setSelectedAccountId(accounts[0].id)
-    }
-  }, [accounts, selectedAccountId])
-
-  useEffect(() => {
-    if (prompts?.length && !selectedPromptId) {
-      setSelectedPromptId(prompts[0].id.toString())
-    }
-  }, [prompts, selectedPromptId])
+  const activeAccountId = selectedAccountId ?? accounts?.[0]?.id ?? null
+  const activePromptId = selectedPromptId || (prompts?.[0]?.id?.toString() ?? '')
 
   const { data: telegramFolders, isLoading: foldersLoading } = useQuery({
-    queryKey: ['telegramFolders', selectedAccountId],
-    queryFn: () => selectedAccountId ? telegramApi.getTelegramFolders(selectedAccountId) : Promise.resolve([]),
-    enabled: !!selectedAccountId,
+    queryKey: ['telegramFolders', activeAccountId],
+    queryFn: () => activeAccountId ? telegramApi.getTelegramFolders(activeAccountId) : Promise.resolve([]),
+    enabled: !!activeAccountId,
   })
 
   const { data: dialogs, isLoading: dialogsLoading } = useQuery({
@@ -155,9 +146,9 @@ export function AgentPage() {
     onSuccess: () => {
       setAgentState({ step: 'reviewing', message: 'Running AI review agent...' })
       runReviewMutation.mutate({ 
-        prompt_id: Number(selectedPromptId),
+        prompt_id: Number(activePromptId),
         max_messages: maxMessages,
-        account_id: selectedAccountId || undefined,
+        account_id: activeAccountId || undefined,
         folder_id: Number(selectedFolderId) || undefined
       })
     },
@@ -176,9 +167,9 @@ export function AgentPage() {
       setAgentState({ step: 'reviewing', message: 'Running AI review agent...' })
       const [, dialogId] = selectedDialogKey.split(':').map(Number)
       runReviewMutation.mutate({ 
-        prompt_id: Number(selectedPromptId),
+        prompt_id: Number(activePromptId),
         max_messages: maxMessages,
-        account_id: selectedAccountId || undefined,
+        account_id: activeAccountId || undefined,
         chat_id: dialogId
       })
     },
@@ -209,11 +200,11 @@ export function AgentPage() {
   })
 
   const handleRun = () => {
-    if (!selectedAccountId) {
+    if (!activeAccountId) {
         error('Please select an account')
         return
     }
-    if (!selectedPromptId) {
+    if (!activePromptId) {
         error('Please select a prompt')
         return
     }
@@ -242,7 +233,7 @@ export function AgentPage() {
       }
       setAgentState({ step: 'fetching', message: 'Fetching messages from folder...' })
       fetchAllMutation.mutate({
-        account_id: selectedAccountId,
+        account_id: activeAccountId,
         folder_id: Number(selectedFolderId),
         max_messages: maxMessages,
         new_only: newOnly,
@@ -257,7 +248,7 @@ export function AgentPage() {
       const [, dialogId] = selectedDialogKey.split(':').map(Number)
       setAgentState({ step: 'fetching', message: 'Fetching messages from dialog...' })
       fetchMessagesMutation.mutate({
-        account_id: selectedAccountId,
+        account_id: activeAccountId,
         chat_id: dialogId,
         max_messages: maxMessages,
         new_only: newOnly,
@@ -270,7 +261,7 @@ export function AgentPage() {
   const isRunning = agentState.step !== 'idle' && agentState.step !== 'complete' && agentState.step !== 'error'
   const isFinished = agentState.step === 'complete' || agentState.step === 'error'
 
-  const filteredDialogs = dialogs?.filter(d => d.account_id === selectedAccountId) || []
+  const filteredDialogs = dialogs?.filter(d => d.account_id === activeAccountId) || []
   const dialogOptions = filteredDialogs.map((d) => ({
     value: `${d.account_id}:${d.id}`,
     label: d.name || `Dialog ${d.id}`,
@@ -307,7 +298,7 @@ export function AgentPage() {
           <label className="label text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)] opacity-80">Active Telegram Account</label>
           <AccountSwitcher
             accounts={accounts || []}
-            selectedAccountId={selectedAccountId}
+            selectedAccountId={activeAccountId}
             onSelectAccount={setSelectedAccountId}
             onAddAccount={() => { setEditingAccount(null); setStep('details'); setIsModalOpen(true); }}
             onDeleteAccount={(id) => { if (confirm('Delete account?')) deleteAccountMutation.mutate(id) }}
@@ -413,7 +404,7 @@ export function AgentPage() {
                       searchPlaceholder={scopeType === 'folder' ? "Type to filter folders..." : "Type to filter by name, id or handle..."}
                       options={scopeType === 'folder' ? folderOptions : dialogOptions}
                       onChange={scopeType === 'folder' ? setSelectedFolderId : setSelectedDialogKey}
-                      disabled={!selectedAccountId}
+                      disabled={!activeAccountId}
                     />
                   </section>
 
@@ -533,18 +524,18 @@ export function AgentPage() {
                             onClick={() => setSelectedPromptId(p.id.toString())}
                             className={cn(
                               "w-full text-left p-6 rounded-2xl border-2 transition-all group flex items-start gap-4 shrink-0 h-auto", 
-                              selectedPromptId === p.id.toString() 
+                              activePromptId === p.id.toString() 
                                 ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)]/10" 
                                 : "border-transparent bg-[var(--color-bg-primary)] hover:border-[var(--color-text-muted)]"
                             )}
                           >
-                            <div className={cn("p-3 rounded-xl shrink-0 transition-colors", selectedPromptId === p.id.toString() ? "bg-[var(--color-accent)] text-white" : "bg-[var(--color-bg-tertiary)] text-[var(--color-text-muted)]")}>
+                            <div className={cn("p-3 rounded-xl shrink-0 transition-colors", activePromptId === p.id.toString() ? "bg-[var(--color-accent)] text-white" : "bg-[var(--color-bg-tertiary)] text-[var(--color-text-muted)]")}>
                                <Settings2 className="h-5 w-5" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-center mb-1 gap-2">
-                                <span className={cn("font-black text-base truncate", selectedPromptId === p.id.toString() ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]")}>{p.name}</span>
-                                {selectedPromptId === p.id.toString() && <Badge variant="default" className="bg-[var(--color-accent)] text-white border-0 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase shrink-0">Active</Badge>}
+                                <span className={cn("font-black text-base truncate", activePromptId === p.id.toString() ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]")}>{p.name}</span>
+                                {activePromptId === p.id.toString() && <Badge variant="default" className="bg-[var(--color-accent)] text-white border-0 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase shrink-0">Active</Badge>}
                               </div>
                               <p className="text-xs text-[var(--color-text-secondary)] line-clamp-2 opacity-80 leading-relaxed">{p.description || 'No description provided for this analysis strategy.'}</p>
                             </div>

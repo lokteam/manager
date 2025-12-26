@@ -48,6 +48,11 @@ export interface ContactDTO {
   value: string
 }
 
+export interface Experience {
+  from?: number
+  to?: number
+}
+
 export interface User {
   id: number
   email: string
@@ -154,6 +159,7 @@ export interface VacancyReview {
   message_id: number
   decision: VacancyReviewDecision
   seniority?: Seniority
+  experience?: Experience
   contacts: ContactDTO[]
   vacancy_position: string
   vacancy_description: string
@@ -176,6 +182,7 @@ export interface VacancyReviewCreate {
   message_id: number
   decision: VacancyReviewDecision
   seniority?: Seniority
+  experience?: Experience
   contacts: ContactDTO[]
   vacancy_position: string
   vacancy_description: string
@@ -187,6 +194,7 @@ export interface VacancyReviewCreate {
 export interface VacancyReviewUpdate {
   decision?: VacancyReviewDecision
   seniority?: Seniority
+  experience?: Experience
   contacts?: ContactDTO[]
   vacancy_position?: string
   vacancy_description?: string

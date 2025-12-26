@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   telegramApi,
   type TelegramFetchRequest,
+  type TelegramFetchChatsRequest,
   type TelegramFetchMessagesRequest,
   type TelegramFolderAddRemoveRequest,
   type TelegramFolderBulkAddRemoveRequest,
@@ -38,7 +39,7 @@ export function useFetchChats() {
   const { success, error } = useToast()
 
   return useMutation({
-    mutationFn: (data: any) => telegramApi.fetchChats(data),
+    mutationFn: (data: TelegramFetchChatsRequest) => telegramApi.fetchChats(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dialogs'] })
       success('Chats synced successfully')

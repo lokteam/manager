@@ -4,6 +4,7 @@ from shared.models import (
   PeerType,
   ContactDTO,
   Seniority,
+  Experience,
   VacancyReviewDecision,
   VacancyProgressStatus,
 )
@@ -117,6 +118,7 @@ class VacancyReviewCreate(SchemaBase):
   message_id: int
   decision: VacancyReviewDecision
   seniority: Seniority | None = None
+  experience: Experience | None = None
   contacts: list[ContactDTO] = []
   vacancy_position: str
   vacancy_description: str
@@ -128,6 +130,7 @@ class VacancyReviewCreate(SchemaBase):
 class VacancyReviewUpdate(SchemaBase):
   decision: VacancyReviewDecision | None = None
   seniority: Seniority | None = None
+  experience: Experience | None = None
   contacts: list[ContactDTO] | None = None
   vacancy_position: str | None = None
   vacancy_description: str | None = None

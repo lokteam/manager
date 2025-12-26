@@ -75,18 +75,20 @@ This rule provides the full context of the Manager Backend API, its authenticati
 
 ## Core Entities & Primary Keys
 
-- **TelegramAccount**: Primary Key `id` (int).
-- **Folder**: Primary Key `id` (int).
-- **Dialog**: Composite Key `(id, account_id)`. URLs: `/dialogs/{account_id}/{id}`.
-- **Message**: Composite Key `(id, dialog_id, account_id)`. URLs: `/messages/{account_id}/{dialog_id}/{id}`.
-- **VacancyReview**: Primary Key `id` (int). References `(message_id, dialog_id, account_id)`.
-- **VacancyProgress**: Primary Key `id` (int). References `review_id`.
+- **TelegramAccount**: PK `id` (int). Linked to `User`.
+- **Folder**: PK `id` (int). Linked to `User`.
+- **Dialog**: PK `id` (int). Unique constraint `(telegram_id, account_id)`.
+- **Message**: PK `id` (int). Unique constraint `(telegram_id, dialog_id)`.
+- **VacancyReview**: PK `id` (int). Unique constraint `message_id`.
+- **VacancyProgress**: PK `id` (int). Unique constraint `review_id`.
+- **Prompt**: Composite PK `(id, version)`.
 
 ## Authentication Flow
 
 1. **Register**: `POST /auth/register?email={email}&password={password}&full_name={name}`
 2. **Login**: `POST /auth/login` (Body: `username={email}&password={password}` as `application/x-www-form-urlencoded`) -> Returns `{ access_token, token_type }`.
 3. **Session**: `GET /users/me` (requires Bearer token) returns current user.
+4. **SSO**: `GET /auth/sso/google/login` redirects to Google. Callback at `/auth/sso/google/callback` redirects to frontend with token.
 
 ---
 
@@ -95,62 +97,65 @@ This rule provides the full context of the Manager Backend API, its authenticati
 ### Accounts
 
 - `GET /accounts`: List user's TG accounts.
-- `POST /accounts`: Create account. Body: `TelegramAccountCreate`.
+- `POST /accounts`: Initiate account linking. Body: `TelegramAccountCreate`. Returns `pending`.
+- `POST /accounts/confirm`: Confirm linking with SMS code. Body: `TelegramAccountConfirm`.
 - `GET /accounts/{id}`: Get account by ID.
-- `PATCH /accounts/{id}`: Update account. Body: `TelegramAccountUpdate`.
-- `DELETE /accounts/{id}`: Delete account.
+- `PATCH /accounts/{id}`: Update account (name/username). Body: `TelegramAccountUpdate`.
+- `DELETE /accounts/{id}`: Unlink account.
 
-### Folders
+### Folders (Internal)
 
-- `GET /folders`: List folders.
-- `POST /folders`: Create folder. Body: `FolderCreate`.
+- `GET /folders`: List internal folders.
+- `POST /folders`: Create internal folder. Body: `FolderCreate`.
 - `GET /folders/{id}`: Get folder by ID.
-- `PATCH /folders/{id}`: Update folder. Body: `FolderUpdate`.
+- `PATCH /folders/{id}`: Update folder name. Body: `FolderUpdate`.
 - `DELETE /folders/{id}`: Delete folder.
 
 ### Dialogs
 
-- `GET /dialogs`: List all dialogs across all user accounts.
-- `POST /dialogs`: Create dialog. Body: `DialogCreate`.
+- `GET /dialogs`: List all dialogs across all accounts (triggers background sync).
 - `GET /dialogs/{account_id}/{id}`: Get specific dialog.
-- `PATCH /dialogs/{account_id}/{id}`: Update dialog. Body: `DialogUpdate`.
-- `DELETE /dialogs/{account_id}/{id}`: Delete dialog.
-
-### Messages
-
-- `GET /messages`: List all messages across all user accounts.
-- `POST /messages`: Create message. Body: `MessageCreate`.
-- `GET /messages/{account_id}/{dialog_id}/{id}`: Get specific message.
-- `PATCH /messages/{account_id}/{dialog_id}/{id}`: Update message. Body: `MessageUpdate`.
-- `DELETE /messages/{account_id}/{dialog_id}/{id}`: Delete message.
 
 ### Telegram native operations
 
-- `POST /telegram/fetch`: Sync all dialogs and messages. Body: `TelegramFetchRequest`.
-- `POST /telegram/fetch-chats`: Sync only dialogs. Body: `TelegramFetchChatsRequest`.
+- `POST /telegram/fetch`: Sync dialogs and messages for an account. Body: `TelegramFetchRequest`.
+- `POST /telegram/fetch-chats`: Sync dialogs for an account. Body: `TelegramFetchChatsRequest`.
 - `POST /telegram/fetch-messages`: Sync messages for one chat. Body: `TelegramFetchMessagesRequest`.
-- `GET /telegram/folders`: List native TG folders. Returns `[{id, title}]`.
+- `GET /telegram/folders`: List native TG folders for an account.
 - `POST /telegram/folder/add`: Add chat to TG folder. Body: `TelegramFolderAddRemoveRequest`.
 - `POST /telegram/folder/remove`: Remove chat from TG folder. Body: `TelegramFolderAddRemoveRequest`.
+- `POST /telegram/folder/bulk-add`: Add multiple chats to TG folder. Body: `TelegramFolderBulkAddRemoveRequest`.
+- `POST /telegram/folder/bulk-remove`: Remove multiple chats from TG folder. Body: `TelegramFolderBulkAddRemoveRequest`.
 - `POST /telegram/folder/create`: Create new TG folder. Body: `TelegramFolderCreateRequest`.
-- `DELETE /telegram/folder/{folder_id}`: Delete TG folder.
+- `PATCH /telegram/folder/rename`: Rename TG folder. Body: `TelegramFolderRenameRequest`.
+- `DELETE /telegram/folder/{folder_id}?account_id={acc_id}`: Delete TG folder.
 
 ### Agents
 
 - `POST /agents/review`: Trigger AI review agent. Body: `AgentReviewRequest`.
 
+### Prompts
+
+- `GET /prompts`: List latest versions of active prompts.
+- `GET /prompts/trash`: List latest versions of deleted prompts.
+- `POST /prompts`: Create new prompt (v1). Body: `PromptCreate`.
+- `GET /prompts/{id}`: Get latest version of a prompt.
+- `GET /prompts/{id}/history`: Get all versions of a prompt.
+- `PATCH /prompts/{id}`: Create a new version of a prompt. Body: `PromptUpdate`.
+- `DELETE /prompts/{id}`: Soft-delete a prompt (all versions).
+- `POST /prompts/{id}/restore`: Restore a soft-deleted prompt.
+
 ### Recruitment Workflow
 
-- `GET /reviews`: List all vacancy reviews.
-- `POST /reviews`: Create manual review. Body: `VacancyReviewCreate`.
-- `GET /reviews/{id}`: Get review detail.
+- `GET /reviews`: List vacancy reviews for current user.
+- `GET /reviews/{id}`: Get review detail with extra dialog/account info.
 - `PATCH /reviews/{id}`: Update review. Body: `VacancyReviewUpdate`.
 - `DELETE /reviews/{id}`: Delete review.
-- `GET /progress`: List all vacancy progress records.
+- `GET /progress`: List progress records with nested review data.
 - `POST /progress`: Create progress record. Body: `VacancyProgressCreate`.
-- `GET /progress/{id}`: Get progress detail.
-- `PATCH /progress/{id}`: Update progress. Body: `VacancyProgressUpdate`.
-- `DELETE /progress/{id}`: Delete progress.
+- `GET /progress/{id}`: Get progress detail with nested review.
+- `PATCH /progress/{id}`: Update progress status/comment. Body: `VacancyProgressUpdate`.
+- `DELETE /progress/{id}`: Delete progress record.
 
 ---
 
@@ -184,8 +189,16 @@ enum ContactType {
   PHONE = "PHONE",
   EMAIL = "EMAIL",
   TELEGRAM_USERNAME = "TELEGRAM_USERNAME",
+  TELEGRAM_ID = "TELEGRAM_ID",
   EXTERNAL_PLATFORM = "EXTERNAL_PLATFORM",
   OTHER = "OTHER",
+}
+enum Seniority {
+  TRAINEE = "TRAINEE",
+  JUNIOR = "JUNIOR",
+  MIDDLE = "MIDDLE",
+  SENIOR = "SENIOR",
+  LEAD = "LEAD",
 }
 
 interface ContactDTO {
@@ -195,12 +208,14 @@ interface ContactDTO {
 
 // Request Bodies
 interface TelegramAccountCreate {
-  id: number;
   api_id: number;
   api_hash: string;
   phone: string;
-  name?: string;
-  username?: string;
+}
+
+interface TelegramAccountConfirm {
+  phone: string;
+  code: string;
 }
 
 interface TelegramAccountUpdate {
@@ -215,52 +230,13 @@ interface FolderUpdate {
   name: string;
 }
 
-interface DialogCreate {
-  id: number;
-  account_id: number;
-  entity_type: DialogType;
-  username?: string;
-  name?: string;
-}
-
-interface DialogUpdate {
-  username?: string;
-  name?: string;
-}
-
-interface MessageCreate {
-  id: number;
-  dialog_id: number;
-  account_id: number;
-  from_id?: number;
-  from_type?: PeerType;
-  text?: string;
-  date?: string; // ISO string
-}
-
-interface MessageUpdate {
-  text?: string;
-}
-
-interface VacancyReviewCreate {
-  message_id: number;
-  dialog_id: number;
-  account_id: number;
-  decision: VacancyReviewDecision;
-  contacts: ContactDTO[];
-  vacancy_position: string;
-  vacancy_description: string;
-  vacancy_requirements?: string;
-  salary_fork_from?: number;
-  salary_fork_to?: number;
-}
-
 interface VacancyReviewUpdate {
   decision?: VacancyReviewDecision;
+  seniority?: Seniority;
   contacts?: ContactDTO[];
   vacancy_position?: string;
   vacancy_description?: string;
-  vacancy_requirements?: string;
+  vacancy_requirements?: string[];
   salary_fork_from?: number;
   salary_fork_to?: number;
 }
@@ -276,52 +252,85 @@ interface VacancyProgressUpdate {
   comment?: string;
 }
 
+interface PromptCreate {
+  name: string;
+  description?: string;
+  content: string;
+}
+
+interface PromptUpdate {
+  name?: string;
+  description?: string;
+  content?: string;
+}
+
 // Telegram Operations Requests
 interface TelegramFetchRequest {
-  new_only?: boolean; // default true
-  date_from?: string; // ISO DateTime
-  date_to?: string; // ISO DateTime
-  max_messages?: number; // default 1000
+  account_id: number;
+  new_only?: boolean;
+  date_from?: string;
+  date_to?: string;
+  max_messages?: number;
   folder_id?: number;
-  dry_run?: boolean; // default false
+  dry_run?: boolean;
 }
 
 interface TelegramFetchChatsRequest {
+  account_id: number;
   folder_id?: number;
-  dry_run?: boolean; // default false
+  dry_run?: boolean;
 }
 
 interface TelegramFetchMessagesRequest {
+  account_id: number;
   chat_id: number;
-  new_only?: boolean; // default true
-  date_from?: string;
-  date_to?: string;
-  max_messages?: number; // default 1000
-  dry_run?: boolean; // default false
+  new_only?: boolean;
+  max_messages?: number;
+  dry_run?: boolean;
 }
 
 interface TelegramFolderAddRemoveRequest {
+  account_id: number;
   folder_id: number;
   chat_id: number;
 }
 
+interface TelegramFolderBulkAddRemoveRequest {
+  account_id: number;
+  folder_id: number;
+  chat_ids: number[];
+}
+
 interface TelegramFolderCreateRequest {
+  account_id: number;
   title: string;
   chat_id?: number;
 }
 
+interface TelegramFolderRenameRequest {
+  account_id: number;
+  folder_id: number;
+  title: string;
+}
+
 interface AgentReviewRequest {
+  prompt_id: number;
   max_messages?: number;
+  unreviewed_only?: boolean;
+  account_id?: number;
+  chat_id?: number;
+  folder_id?: number;
 }
 ```
 
 ## Implementation Guidelines
 
-- **Strict Ownership**: You cannot access resources not owned by your `TelegramAccount`. The backend enforces this via `current_user` lookups.
-- **Hierarchical Filtering**: Dialogs, Messages, and Reviews are grouped by `account_id`. Always include `account_id` and `dialog_id` in composite keys.
+- **Ownership**: Resources (Accounts, Prompts, etc.) are tied to `current_user`. The backend enforces access control.
+- **Hierarchical Filtering**: Most Telegram operations and Agent reviews require an `account_id`.
 - **Error Handling**:
-  - `401`: Redirect to login.
-  - `403`: Forbidden (Ownership/RBAC).
+  - `401`: Unauthorized (Login required).
+  - `403`: Forbidden (Access denied).
   - `404`: Not Found.
-  - `422`: Validation error (check request body against schema).
-- **State Management**: Prefer caching by the full composite key for Dialogs and Messages (e.g., `dialog_id:account_id`).
+  - `422`: Validation error (schema mismatch).
+- **Prompt Versioning**: Prompts are immutable by version. Updating a prompt creates a new version. AI reviews store the `prompt_id` and `prompt_version` used.
+

@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
-from shared.models import Message, VacancyReviewDecision, ContactDTO, Seniority
+from shared.models import (
+  Message,
+  VacancyReviewDecision,
+  ContactDTO,
+  Seniority,
+  Experience,
+)
 
 
 class MessageReviewOutput(BaseModel):
@@ -11,6 +17,10 @@ class MessageReviewOutput(BaseModel):
   seniority: Seniority | None = Field(
     default=None,
     description="Seniority level: TRAINEE, JUNIOR, MIDDLE, SENIOR, LEAD. MUST be provided if decision is APPROVE.",
+  )
+  experience: Experience | None = Field(
+    default=None,
+    description="Years of experience required. Parse from text (e.g., '3+ years' -> from=3, to=null).",
   )
   contacts: list[ContactDTO] = Field(
     default_factory=list, description="List of extracted contacts"
@@ -49,13 +59,18 @@ async def process_messages(
   system_prompt += """
 **Instructions:**
 1. Set 'decision' to 'APPROVE' only if it matches the above criteria.
-2. For approved vacancies, extract: position, description, seniority, requirements, salary range, and contacts.
+2. For approved vacancies, extract: position, description, seniority, experience, requirements, salary range, and contacts.
 3. 'seniority' is MANDATORY for approved vacancies. It should be one of: TRAINEE, JUNIOR, MIDDLE, SENIOR, LEAD. 
    - If there is no direct hint in the message, you MUST infer it from the requirements, salary, or responsibilities described.
    - For example, if it mentions "3+ years", "architect", or "mentoring", it's likely SENIOR or LEAD. 
-   - If it mentions "entry level" or "students", it's TRAINEE or JUNIOR. 
    - Never leave this field empty for approved vacancies.
-4. 'vacancy_requirements' should be a list of strings, each string representing a single requirement.
+4. 'experience' should be an object with 'from' and 'to' integer values representing years.
+   - "3+ years" -> {"from": 3, "to": null}
+   - "2-5 years" -> {"from": 2, "to": 5}
+   - "up to 1 year" -> {"from": null, "to": 1}
+   - If not mentioned, set both to null or leave as null.
+5. 'vacancy_requirements' should be a list of strings, each string representing a single requirement.
+
 4. Contacts should be objects with 'type' and 'value'.
    **Use the following keys for 'type':**
    - PHONE: Mobile phone number

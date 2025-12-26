@@ -1,33 +1,14 @@
-import { useEffect, useState, createContext, useContext, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-type ToastType = 'success' | 'error' | 'info' | 'warning'
+import { ToastContext, type ToastType, type ToastContextValue } from './use-toast'
 
 interface Toast {
   id: string
   type: ToastType
   message: string
   duration?: number
-}
-
-interface ToastContextValue {
-  toast: (type: ToastType, message: string, duration?: number) => void
-  success: (message: string, duration?: number) => void
-  error: (message: string, duration?: number) => void
-  info: (message: string, duration?: number) => void
-  warning: (message: string, duration?: number) => void
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null)
-
-export function useToast() {
-  const context = useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider')
-  }
-  return context
 }
 
 interface ToastProviderProps {
@@ -121,4 +102,3 @@ function ToastItem({ toast, onClose }: ToastItemProps) {
     </div>
   )
 }
-
