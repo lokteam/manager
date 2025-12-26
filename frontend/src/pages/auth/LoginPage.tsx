@@ -19,6 +19,7 @@ export function LoginPage() {
     if (token) {
       setToken(token)
       authApi.getMe().then((user) => {
+        localStorage.removeItem('disclaimer_accepted')
         setUser(user)
         queryClient.setQueryData(['me'], user)
         success('Welcome back!')
