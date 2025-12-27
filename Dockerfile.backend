@@ -1,0 +1,31 @@
+FROM python:3.13-slim-bookworm
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+
+# Enable bytecode compilation
+ENV UV_COMPILE_BYTECODE=1
+
+# Copy deps
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY shared ./shared
+COPY migrate ./
+RUN chmod +x migrate
+# Copy project files
+COPY agents ./agents
+COPY backend ./backend
+COPY telegram ./telegram
+
+# Expose port
+EXPOSE 8000
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Run the application
+CMD ["/bin/bash", "-c", "./migrate apply && uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --app-dir backend/src"]

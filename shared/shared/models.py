@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 
 # Database configuration
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "database.db")
+DB_PATH = os.getenv("SQLITE_DB_PATH") or os.path.join(
+  os.path.dirname(os.path.abspath(__file__)), "database.db"
+)
 DB_URL = f"sqlite:///{DB_PATH}"
 ASYNC_DB_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
