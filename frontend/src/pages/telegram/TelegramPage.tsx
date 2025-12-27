@@ -66,7 +66,7 @@ export function TelegramPage() {
 
       bulkAddChatsMutation.mutate({
         account_id: activeAccountId,
-        folderId,
+        folder_id: folderId,
         chat_ids: telegramIds
       }, {
         onSuccess: () => {
@@ -101,7 +101,7 @@ export function TelegramPage() {
 
     bulkRemoveChatsMutation.mutate({
       account_id: activeAccountId,
-      folderId,
+      folder_id: folderId,
       chat_ids: telegramIds
     });
   };
