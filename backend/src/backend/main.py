@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from shared.models import User, UserRole, get_async_session
@@ -13,8 +14,10 @@ from .api.v1.routers import api_router
 from typing import Annotated
 
 app = FastAPI(title="Manager Backend")
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
 # Include API routers
 app.include_router(api_router, prefix="/api/v1")
@@ -88,7 +91,9 @@ async def google_callback(
   request: Request, session: AsyncSession = Depends(get_async_session)
 ):
   async with google_sso:
-    user_info = await google_sso.verify_and_process(request)
+    user_info = await google_sso.verify_and_process(
+      request, redirect_uri=f"{BACKEND_URL}/auth/sso/google/callback"
+    )
 
     if not user_info:
       raise HTTPException(status_code=400, detail="SSO verification failed")
