@@ -39,8 +39,6 @@ ENV/
 *.db*
 .ruff_cache/
 
-
-# Front
 # Logs
 logs
 *.log
