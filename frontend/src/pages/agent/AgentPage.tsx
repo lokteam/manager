@@ -598,7 +598,7 @@ export function AgentPage() {
                     <Button 
                       className="w-full py-7 rounded-[2rem] text-xl font-black shadow-2xl hover:scale-[1.01] transition-all duration-300 shadow-[var(--color-accent)]/20"
                       onClick={handleRun}
-                      disabled={!selectedAccountId || !selectedPromptId}
+                      disabled={!activeAccountId || !activePromptId || (scopeType === 'folder' ? !selectedFolderId : !selectedDialogKey)}
                     >
                       <Play className="h-6 w-6 fill-current mr-3" />
                       Launch Analysis Agent
